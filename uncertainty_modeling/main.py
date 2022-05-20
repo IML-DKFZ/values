@@ -9,7 +9,7 @@ from argparse import Namespace, ArgumentParser
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from msd_datamodule import MSDDataModule
+from toy_datamodule import ToyDataModule
 from unet_lightning import UNetExperiment
 
 from pytorch_lightning.callbacks import TQDMProgressBar
@@ -32,7 +32,7 @@ def main_cli(
     parser = ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
     parser = UNetExperiment.add_module_specific_args(parser)
-    parser = MSDDataModule.add_data_specific_args(parser)
+    parser = ToyDataModule.add_data_specific_args(parser)
     parser.add_argument(
         "--exp_name", type=str, default="U-Net-Experiment", help="Experiment name."
     )

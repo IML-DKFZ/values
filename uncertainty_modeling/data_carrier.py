@@ -1,5 +1,6 @@
 import fnmatch
 import json
+import random
 from bisect import bisect
 import os
 from typing import Optional, List, Dict
@@ -45,6 +46,7 @@ class DataCarrier:
         slice_offset: int = 5,
         subject_ids: Optional[List[str]] = None,
         slice_axis=0,
+        num_raters=1,
     ) -> List[dict]:
         """
         Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
@@ -62,10 +64,10 @@ class DataCarrier:
         samples = []
 
         (image_dir, _, image_filenames) = next(
-            os.walk(os.path.join(base_dir, "imagesTr"))
+            os.walk(os.path.join(base_dir, "imagesTs"))
         )
         (label_dir, _, label_filenames) = next(
-            os.walk(os.path.join(base_dir, "labelsTr"))
+            os.walk(os.path.join(base_dir, "labelsTs"))
         )
         for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
             if (
@@ -75,7 +77,27 @@ class DataCarrier:
                 image_array = np.load(image_path, mmap_mode="r")
                 file_len = image_array.shape[slice_axis]
 
-                label_path = os.path.join(label_dir, image_filename)
+                label_paths = []
+                for rater in range(num_raters):
+                    label_path = (
+                        os.path.join(
+                            label_dir,
+                            "{}_{}.npy".format(
+                                image_filename.split(".")[0], str(rater).zfill(2)
+                            ),
+                        )
+                        if "{}_{}.npy".format(
+                            image_filename.split(".")[0], str(rater).zfill(2)
+                        )
+                        in label_filenames
+                        else None
+                    )
+                    if label_path is not None:
+                        label_paths.append(label_path)
+
+                label_path = (
+                    random.choice(label_paths) if len(label_paths) > 0 else None
+                )
 
                 samples.extend(
                     [
