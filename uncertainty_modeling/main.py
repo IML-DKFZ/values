@@ -22,7 +22,7 @@ def main_cli(
     """Setting hparams and environment up for the main
 
     Args:
-        config_file (str, optional): path to hyperpameter defaults from light_seg. Defaults to './unet_defaults.yml'.
+        config_file (str, optional): path to hyperpameter defaults from uncertainty_modeling. Defaults to './unet_defaults.yml'.
         get_nested_dict (bool, optional): if True: returns nested subdict to be saved. Defaults to False.
 
     Returns:

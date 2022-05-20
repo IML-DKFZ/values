@@ -11,7 +11,7 @@ This repository is based on the [Pytorch Lightning Segmentation Example](https:/
    ```
    pip install -r requirements.txt
    ```
-4. Run light_seg/main.py.
+4. Run uncertainty_modeling/main.py.
 
 ---
 

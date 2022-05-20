@@ -4,7 +4,7 @@ import os
 import numpy as np
 import torch
 
-from light_seg.data_carrier import DataCarrier
+from uncertainty_modeling.data_carrier import DataCarrier
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
 

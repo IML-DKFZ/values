@@ -22,7 +22,7 @@ requirements = resolve_requirements(
 
 
 setup(
-    name="light_seg",
+    name="uncertainty_modeling",
     version="0.1",
     packages=find_packages(),
     python_requires=">=3.6",
