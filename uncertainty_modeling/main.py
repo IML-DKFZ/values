@@ -9,7 +9,8 @@ from argparse import Namespace, ArgumentParser
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from toy_datamodule import ToyDataModule
+from uncertainty_modeling.toy_datamodule_3D import ToyDataModule3D
+from uncertainty_modeling.vnet_lightning import VNetExperiment
 from unet_lightning import UNetExperiment
 
 from pytorch_lightning.callbacks import TQDMProgressBar
@@ -32,7 +33,7 @@ def main_cli(
     parser = ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
     parser = UNetExperiment.add_module_specific_args(parser)
-    parser = ToyDataModule.add_data_specific_args(parser)
+    parser = ToyDataModule3D.add_data_specific_args(parser)
     parser.add_argument(
         "--exp_name", type=str, default="U-Net-Experiment", help="Experiment name."
     )
@@ -100,7 +101,7 @@ def generate_nested_dict(hparams: Namespace) -> dict:
     hparams_module, _ = parser_module.parse_known_args()
 
     parser_data = ArgumentParser()
-    parser_data = MSDDataModule.add_data_specific_args(parser_data)
+    parser_data = ToyDataModule3D.add_data_specific_args(parser_data)
     hparams_data, _ = parser_data.parse_known_args()
 
     hparams_train = Namespace()
@@ -147,7 +148,7 @@ def main(hparams: Namespace, nested_dict: Optional[dict] = None):
 
     dm.prepare_data()
     dm.setup("fit")
-    model = UNetExperiment(hparams, nested_dict=nested_dict, **vars(hparams))
+    model = VNetExperiment(hparams, nested_dict=nested_dict, **vars(hparams))
     trainer.fit(model, datamodule=dm)
 
     # Testing is currently done in a separate script, use these lines if you want to enable it within the
@@ -157,5 +158,5 @@ def main(hparams: Namespace, nested_dict: Optional[dict] = None):
 
 
 if __name__ == "__main__":
-    hparams, nested_dict = main_cli(config_file="./unet_defaults.yml")
+    hparams, nested_dict = main_cli(config_file="./vnet_defaults.yml")
     main(hparams, nested_dict=nested_dict)
