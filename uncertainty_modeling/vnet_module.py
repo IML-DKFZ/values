@@ -7,28 +7,29 @@ class DownConvolution(nn.Module):
         self,
         in_channels: int,
         out_channels,
+        activation,
         kernel_size_down: int = 2,
         kernel_size: int = 5,
         n_conv: int = 2,
     ):
         super(DownConvolution, self).__init__()
         self.n_conv = n_conv
+        self.activation = activation
         self.down_conv = self.conv_block(
             in_channels, out_channels, kernel_size_down, 2, 0
         )
         self.conv_1 = self.conv_block(out_channels, out_channels, kernel_size, 1, 2)
         self.conv_2 = self.conv_block(out_channels, out_channels, kernel_size, 1, 2)
 
-    @staticmethod
     def conv_block(
-        in_channels, out_channels, kernel_size, stride, padding
+        self, in_channels, out_channels, kernel_size, stride, padding
     ) -> nn.Sequential:
         layer = nn.Sequential(
             nn.Conv3d(
                 in_channels, out_channels, kernel_size, stride=stride, padding=padding
             ),
             nn.BatchNorm3d(out_channels),
-            nn.PReLU(),
+            self.activation,
         )
         return layer
 
@@ -37,7 +38,7 @@ class DownConvolution(nn.Module):
         conv = self.conv_1(down_conv)
         for conv_idx in range(1, self.n_conv):
             conv = self.conv_2(conv)
-        residual = down_conv + conv
+        residual = self.activation(down_conv + conv)
         return residual
 
 
@@ -47,32 +48,32 @@ class UpConvolution(nn.Module):
         in_channels: int,
         out_channels: int,
         skip_channels: int,
+        activation,
         kernel_size_up: int = 2,
         kernel_size: int = 5,
         n_conv=2,
     ):
         super(UpConvolution, self).__init__()
         self.n_conv = n_conv
-        self.up_conv = self.up_convolution(in_channels, out_channels, kernel_size_up)
-        self.conv_1 = self.conv_block(
-            out_channels + skip_channels, out_channels, kernel_size, 1
-        )
+        self.activation = activation
+        self.up_conv = self.up_convolution(in_channels, skip_channels, kernel_size_up)
+        self.conv_1 = self.conv_block(skip_channels * 2, out_channels, kernel_size, 1)
         self.conv_2 = self.conv_block(out_channels, out_channels, kernel_size, 1)
 
-    @staticmethod
-    def up_convolution(in_channels, out_channels, kernel_size):
+    def up_convolution(self, in_channels, out_channels, kernel_size):
         return nn.Sequential(
             nn.ConvTranspose3d(in_channels, out_channels, kernel_size, stride=2),
             nn.BatchNorm3d(out_channels),
-            nn.PReLU(),
+            self.activation,
         )
 
-    @staticmethod
-    def conv_block(in_channels, out_channels, kernel_size, stride) -> nn.Sequential:
+    def conv_block(
+        self, in_channels, out_channels, kernel_size, stride
+    ) -> nn.Sequential:
         layer = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size, stride=stride, padding=2),
             nn.BatchNorm3d(out_channels),
-            nn.PReLU(),
+            self.activation,
         )
         return layer
 
@@ -82,7 +83,7 @@ class UpConvolution(nn.Module):
         conv = self.conv_1(concat)
         for conv_idx in range(1, self.n_conv):
             conv = self.conv_2(conv)
-        residual = up_conv + conv
+        residual = self.activation(concat + conv)
         return residual
 
 
@@ -94,24 +95,39 @@ class VNet(nn.Module):
         initial_filter_size: int = 16,
         kernel_size: int = 5,
         kernel_size_down=2,
+        activation_function="elu",
     ):
         super(VNet, self).__init__()
+        self.in_channels = in_channels
         self.in_conv = self.input_conv(in_channels, initial_filter_size, kernel_size)
+        self.activation = nn.ELU() if activation_function == "elu" else nn.PReLU()
         # 16 to 32 channels
         self.down_conv_1 = DownConvolution(
-            initial_filter_size, initial_filter_size * 2, n_conv=2
+            initial_filter_size,
+            initial_filter_size * 2,
+            activation=self.activation,
+            n_conv=2,
         )
         # 32 to 64 channels
         self.down_conv_2 = DownConvolution(
-            initial_filter_size * 2, initial_filter_size * 2**2, n_conv=3
+            initial_filter_size * 2,
+            initial_filter_size * 2**2,
+            activation=self.activation,
+            n_conv=3,
         )
         # 64 to 128 channels
         self.down_conv_3 = DownConvolution(
-            initial_filter_size * 2**2, initial_filter_size * 2**3, n_conv=3
+            initial_filter_size * 2**2,
+            initial_filter_size * 2**3,
+            activation=self.activation,
+            n_conv=3,
         )
         # 128 to 256 channels
         self.bottleneck = DownConvolution(
-            initial_filter_size * 2**3, initial_filter_size * 2**4, n_conv=3
+            initial_filter_size * 2**3,
+            initial_filter_size * 2**4,
+            activation=self.activation,
+            n_conv=3,
         )
 
         # keep 256 channels
@@ -119,6 +135,7 @@ class VNet(nn.Module):
             initial_filter_size * 2**4,
             initial_filter_size * 2**4,
             initial_filter_size * 2**3,
+            activation=self.activation,
             n_conv=3,
         )
 
@@ -127,6 +144,7 @@ class VNet(nn.Module):
             initial_filter_size * 2**4,
             initial_filter_size * 2**3,
             initial_filter_size * 2**2,
+            activation=self.activation,
             n_conv=3,
         )
 
@@ -135,6 +153,7 @@ class VNet(nn.Module):
             initial_filter_size * 2**3,
             initial_filter_size * 2**2,
             initial_filter_size * 2,
+            activation=self.activation,
             n_conv=2,
         )
 
@@ -143,6 +162,7 @@ class VNet(nn.Module):
             initial_filter_size * 2**2,
             initial_filter_size * 2,
             initial_filter_size,
+            activation=self.activation,
             n_conv=1,
         )
 
@@ -158,25 +178,25 @@ class VNet(nn.Module):
         layer = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, padding=2),
             nn.BatchNorm3d(out_channels),
-            nn.PReLU(),
         )
         return layer
 
-    @staticmethod
     def output_conv(
-        in_channels: int, out_channels: int, kernel_size: int = 1
+        self, in_channels: int, out_channels: int, kernel_size: int = 1
     ) -> nn.Sequential:
         layer = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size, stride=1),
             nn.BatchNorm3d(out_channels),
-            nn.PReLU(),
+            self.activation,
         )
         return layer
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Encoder
         in_conv = self.in_conv(x)
-        residual_1 = x + in_conv
+        repeat_num = 16 // self.in_channels
+        x16 = x.repeat([1, repeat_num, 1, 1, 1][:5])
+        residual_1 = self.activation(x16 + in_conv)
         down_conv_1 = self.down_conv_1(residual_1)
         down_conv_2 = self.down_conv_2(down_conv_1)
         down_conv_3 = self.down_conv_3(down_conv_2)

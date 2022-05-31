@@ -2,7 +2,7 @@
 ##############################            LOGGING           ####################################
 ################################################################################################
 exp_name: "Toy-Data-Test"
-save_dir: "/home/kahl/Documents/ToyExperiment"
+save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
 progress_bar_refresh_rate: 10
 profiler: True
 
@@ -23,7 +23,7 @@ gpus: '1'
 ################################################################################################
 dataset_name: "Case_1"
 num_raters: 3
-data_input_dir: "/home/kahl/Documents/ToyData"
+data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
 data_num_folds: 5
 data_fold_id: 0
 dataloader_workers: 12

@@ -399,6 +399,7 @@ def get_data_samples(
     pattern: str = "*.npy",
     subject_ids: Optional[List[str]] = None,
     num_raters: int = 1,
+    test=False,
 ) -> List[dict]:
     """
     Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
@@ -406,20 +407,22 @@ def get_data_samples(
     Args:
         base_dir (str): Directory where preprocessed numpy files reside. Should contain subfolders imagesTr and labelsTr
         pattern (str): Pattern to match os.walk filenames against.
-        slice_offset (int): Offset possible slices in the dataset.
         subject_ids (list/array): Which subject IDs to load.
 
     Returns:
         samples [List[dict]]: All possible slices for each subject id.
     """
     samples = []
-
-    (image_dir, _, image_filenames) = next(os.walk(os.path.join(base_dir, "imagesTr")))
-    (label_dir, _, label_filenames) = next(os.walk(os.path.join(base_dir, "labelsTr")))
+    train_test = "Tr" if not test else "Ts"
+    (image_dir, _, image_filenames) = next(
+        os.walk(os.path.join(base_dir, "images{}".format(train_test)))
+    )
+    (label_dir, _, label_filenames) = next(
+        os.walk(os.path.join(base_dir, "labels{}".format(train_test)))
+    )
     for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
         if subject_ids is not None and image_filename in subject_ids:
             image_path = os.path.join(image_dir, image_filename)
-            image_array = np.load(image_path, mmap_mode="r")
 
             label_paths = []
             for rater in range(num_raters):
