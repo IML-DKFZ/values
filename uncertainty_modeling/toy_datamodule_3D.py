@@ -7,7 +7,8 @@ from typing import Optional, List
 
 import numpy as np
 import pytorch_lightning as pl
-from batchgenerators.dataloading.data_loader import SlimDataLoaderBase
+from batchgenerators.augmentations.crop_and_pad_augmentations import crop
+from batchgenerators.dataloading.data_loader import DataLoader
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
@@ -232,6 +233,7 @@ class ToyDataModule3D(pl.LightningDataModule):
             file_pattern="*.npy",
             subject_ids=self.val_keys,
             num_raters=self.num_raters,
+            training=False,
         )
         val_augmenter = FixedLengthAugmenter(
             data_loader=val_loader,
@@ -303,11 +305,12 @@ class ToyDataModule3D(pl.LightningDataModule):
         return parser
 
 
-class NumpyDataLoader(SlimDataLoaderBase):
+class NumpyDataLoader(DataLoader):
     def __init__(
         self,
         base_dir: str,
         batch_size: int = 16,
+        patch_size: int = 64,
         file_pattern: str = "*.npy",
         subject_ids: Optional[List[str]] = None,
         training: bool = True,
@@ -324,17 +327,29 @@ class NumpyDataLoader(SlimDataLoaderBase):
             file_pattern (str): Pattern to match os.walk filenames against when resolving possible subjects/slices.
             subject_ids (list/array): Which subject IDs to load.
         """
-        self.samples = get_data_samples(
-            base_dir=base_dir,
-            pattern=file_pattern,
-            subject_ids=subject_ids,
-            num_raters=num_raters,
-        )
+        if training:
+            self.samples = get_train_data_samples(
+                base_dir=base_dir,
+                pattern=file_pattern,
+                subject_ids=subject_ids,
+                num_raters=num_raters,
+            )
+        # Validation loop
+        else:
+            self.samples = get_val_test_data_samples(
+                base_dir=base_dir,
+                pattern=file_pattern,
+                subject_ids=subject_ids,
+                num_raters=num_raters,
+                test=False,
+            )
         super(NumpyDataLoader, self).__init__(self.samples, batch_size)
 
         self.batch_size = batch_size
+        self.patch_size = patch_size
         self.training = training
         self.start_idx = 0
+        self.indices = list(range(len(self.samples)))
 
     def generate_train_batch(self) -> dict:
         """Generate batch. Overwritten function from batchgenerators' SlimDataLoaderBase.
@@ -342,7 +357,8 @@ class NumpyDataLoader(SlimDataLoaderBase):
             batch (dict): The generated batch
         """
         if self.training:
-            samples = random.sample(self._data, self.batch_size)
+            idx = self.get_indices()
+            samples = [self._data[i] for i in idx]
         else:
             samples = [
                 x
@@ -358,14 +374,47 @@ class NumpyDataLoader(SlimDataLoaderBase):
 
         for sample in samples:
             image_array = np.load(sample["image_path"], mmap_mode="r")
+            # Add channel to image dimension
             image_array = np.expand_dims(image_array, axis=0)
-            data.append(image_array)
+            if self.training:
+                # Second expand is needed for batchgenerators crop
+                image_array = np.expand_dims(image_array, axis=0)
             image_paths.append(sample["image_path"])
             if sample["label_path"] is not None:
                 label_array = np.load(sample["label_path"], mmap_mode="r")
+                # Add channel to image dimension
                 label_array = np.expand_dims(label_array, axis=0)
-                labels.append(label_array)
+                if self.training:
+                    # Second expand is needed for batchgenerators crop
+                    label_array = np.expand_dims(label_array, axis=0)
                 label_paths.append(sample["label_path"])
+            else:
+                label_array = None
+            if self.training:
+                image_patch, label_patch = crop(
+                    image_array, label_array, self.patch_size, crop_type="random"
+                )
+                image_patch = image_patch[0]
+                if label_patch is not None:
+                    label_patch = label_patch[0]
+            else:
+                image_patch = image_array[
+                    :,
+                    sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
+                    sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
+                    sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
+                ]
+                if label_array is not None:
+                    label_patch = label_array[
+                        :,
+                        sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
+                        sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
+                        sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
+                    ]
+                else:
+                    label_patch = None
+            data.append(image_patch)
+            labels.append(label_patch)
 
         batch = {
             "data": np.asarray(data),
@@ -388,12 +437,68 @@ class FixedLengthAugmenter(MultiThreadedAugmenter):
         return len(self.generator)
 
 
-def get_data_samples(
+def get_train_data_samples(
+    base_dir: str,
+    pattern: str = "*.npy",
+    subject_ids: Optional[List[str]] = None,
+    num_raters: int = 1,
+) -> List[dict]:
+    """
+    Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
+
+    Args:
+        base_dir (str): Directory where preprocessed numpy files reside. Should contain subfolders imagesTr and labelsTr
+        pattern (str): Pattern to match os.walk filenames against.
+        subject_ids (list/array): Which subject IDs to load.
+        num_raters (int): Number of segmentation variants
+        test (bool): Whether testing or training is done
+
+    Returns:
+        samples [List[dict]]: All possible slices for each subject id.
+    """
+    samples = []
+    (image_dir, _, image_filenames) = next(os.walk(os.path.join(base_dir, "imagesTr")))
+    (label_dir, _, label_filenames) = next(os.walk(os.path.join(base_dir, "labelsTr")))
+    for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
+        if subject_ids is not None and image_filename in subject_ids:
+            image_path = os.path.join(image_dir, image_filename)
+
+            label_paths = []
+            for rater in range(num_raters):
+                label_path = (
+                    os.path.join(
+                        label_dir,
+                        "{}_{}.npy".format(
+                            image_filename.split(".")[0], str(rater).zfill(2)
+                        ),
+                    )
+                    if "{}_{}.npy".format(
+                        image_filename.split(".")[0], str(rater).zfill(2)
+                    )
+                    in label_filenames
+                    else None
+                )
+                if label_path is not None:
+                    label_paths.append(label_path)
+
+            label_path = random.choice(label_paths) if len(label_paths) > 0 else None
+            samples.append(
+                {
+                    "image_path": image_path,
+                    "label_path": label_path,
+                }
+            )
+
+    return samples
+
+
+def get_val_test_data_samples(
     base_dir: str,
     pattern: str = "*.npy",
     subject_ids: Optional[List[str]] = None,
     num_raters: int = 1,
     test=False,
+    patch_size: int = 64,
 ) -> List[dict]:
     """
     Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
@@ -439,12 +544,50 @@ def get_data_samples(
                     label_paths.append(label_path)
 
             label_path = random.choice(label_paths) if len(label_paths) > 0 else None
-            samples.append(
-                {
-                    "image_path": image_path,
-                    "label_path": label_path,
-                }
+
+            image_array = np.load(image_path, mmap_mode="r")
+            pad_size_x = image_array.shape[0] + (
+                image_array.shape[0] % (patch_size // 2)
             )
+            pad_size_y = image_array.shape[1] + (
+                image_array.shape[1] % (patch_size // 2)
+            )
+            pad_size_z = image_array.shape[2] + (
+                image_array.shape[2] % (patch_size // 2)
+            )
+
+            start_idx_x = 0
+            start_idx_y = 0
+            start_idx_z = 0
+
+            crop_indices = []
+            while start_idx_z <= pad_size_z - patch_size:
+                start_idx_y = 0
+                while start_idx_y <= pad_size_y - patch_size:
+                    start_idx_x = 0
+                    while start_idx_x <= pad_size_x - patch_size:
+                        crop_indices.append(
+                            (
+                                (start_idx_x, start_idx_x + patch_size),
+                                (start_idx_y, start_idx_y + patch_size),
+                                (start_idx_z, start_idx_z + patch_size),
+                            )
+                        )
+                        start_idx_x += patch_size // 2
+                    start_idx_y += patch_size // 2
+                start_idx_z += patch_size // 2
+
+            for crop_index in crop_indices:
+                samples.append(
+                    {
+                        "image_path": image_path,
+                        "label_path": label_path,
+                        "pad_size_x": pad_size_x,
+                        "pad_size_y": pad_size_y,
+                        "pad_size_z": pad_size_z,
+                        "crop_idx": crop_index,
+                    }
+                )
 
     return samples
 

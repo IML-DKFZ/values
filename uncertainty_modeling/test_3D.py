@@ -16,7 +16,7 @@ from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
-from uncertainty_modeling.toy_datamodule_3D import get_data_samples
+from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
 from uncertainty_modeling.vnet_module import VNet
 from loss_modules import SoftDiceLoss
 from tqdm import tqdm
@@ -235,8 +235,11 @@ def run_test(args: Namespace) -> None:
         test_data_dir, subject_ids = dir_and_subjects_from_train(hparams, args)
 
     test_datacarrier = DataCarrier3D()
-    data_samples = get_data_samples(
-        base_dir=test_data_dir, subject_ids=subject_ids, test=True
+    data_samples = get_val_test_data_samples(
+        base_dir=test_data_dir,
+        subject_ids=subject_ids,
+        test=True,
+        num_raters=hparams["num_raters"],
     )
 
     model = load_model_from_checkpoint(checkpoint)
