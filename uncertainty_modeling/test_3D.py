@@ -84,6 +84,7 @@ def dir_and_subjects_from_train(
     Args:
         hparams: The hyperparameters from the checkpoint. Needed to infer the path where the test data is as well
                  as the subject ids that are in the test data
+        args: Arguments for testing, possibly specifying a data_input_dir
 
     Returns:
         test_data_dir [str]: The directory which contains the test images
@@ -114,7 +115,7 @@ def load_model_from_checkpoint(checkpoint: Dict) -> VNet:
         checkpoint: The checkpoint to load the model from
 
     Returns:
-        model [UNet]: The model for the predictions
+        model [VNet]: The model for the predictions
     """
     hparams = checkpoint["hyper_parameters"]
     state_dict = OrderedDict()
@@ -132,7 +133,6 @@ def calculate_test_metrics(
     """
     Calculate the metrics for evaluation
     Args:
-        output [torch.Tensor]: The output of the network.
         output_softmax [torch.Tensor]: The output of the network after applying softmax.
         ground_truth [torch.Tensor]: The ground truth segmentation.
 
@@ -200,6 +200,7 @@ def save_results(
     Args:
         test_datacarrier: The datacarrier which contains the data to save
         hparams: Dict with hyperparameters of training. Needed to infer the path where to store test results.
+        args: Arguments for testing, possibly specifying a data_input_dir and a save_dir
     """
     save_dir = args.save_dir if args.save_dir is not None else hparams["save_dir"]
     data_input_dir = (

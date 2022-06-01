@@ -1,9 +1,6 @@
-import fnmatch
 import json
-import random
-from bisect import bisect
 import os
-from typing import Optional, List, Dict
+from typing import Dict
 
 import numpy as np
 import torch
@@ -39,7 +36,8 @@ class DataCarrier3D:
         os.makedirs(self.save_pred_dir, exist_ok=True)
         os.makedirs(self.save_pred_prob_dir, exist_ok=True)
 
-    def load_image(self, sample) -> Dict:
+    @staticmethod
+    def load_image(sample) -> Dict:
         """
         Get an input dictionary from a single 2D slice of a 3D image
         Args:
@@ -62,11 +60,11 @@ class DataCarrier3D:
             input["seg"] = np.expand_dims(label_array, 0)
         return input
 
-    def concat_data(self, batch: Dict, softmax_pred: torch.Tensor):
+    def concat_data(self, batch: Dict, softmax_pred: torch.Tensor) -> None:
         """
-        Concatenate the data, i.e. sort the slice into the right position of the respective image.
+        Concatenate the data
         Stores the data in self.data which is a dictionary containing the image paths as keys
-        and the other information like which slices are already added for the image and the slice data (sorted).
+        and the other information like the image and the segmentation data.
         Args:
             batch: batch to insert in self.data
             softmax_pred: softmax prediction to insert in self.data
@@ -103,6 +101,7 @@ class DataCarrier3D:
             root_dir: The root directory where the experiments are saved
             exp_name: Name of the experiment
             version: version of the experiment
+            org_data_path: The path to the original data to infer header information
         """
         self._create_save_dirs(root_dir=root_dir, exp_name=exp_name, version=version)
         for key, value in self.data.items():

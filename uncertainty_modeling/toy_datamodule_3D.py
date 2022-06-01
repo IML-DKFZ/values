@@ -48,10 +48,10 @@ class ToyDataModule3D(pl.LightningDataModule):
         self.test_keys = None
 
     @property
-    def num_classes(self):
+    def num_classes(self) -> int:
         return 2
 
-    def prepare_data(self):
+    def prepare_data(self) -> None:
         # Preprocess data if this was not already done
         if not os.path.exists(
             os.path.join(self.data_input_dir, self.dataset_name, "preprocessed")
@@ -93,7 +93,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         else:
             print("Splits files found. Using the folds specified in the file.")
 
-    def setup(self, stage: Optional[str] = None):
+    def setup(self, stage: Optional[str] = None) -> None:
         """Load the keys for training, validation and testing
         Args:
             stage: The current stage of training
@@ -106,7 +106,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         self.val_keys = splits[self.data_fold_id]["val"]
         self.test_keys = splits[self.data_fold_id]["test"]
 
-    def preprocess_dataset(self, root_dir: str):
+    def preprocess_dataset(self, root_dir: str) -> None:
         """Preprocess the dataset, i.e. normalize the images (z-score normalization) and save
 
         Args:
@@ -160,12 +160,13 @@ class ToyDataModule3D(pl.LightningDataModule):
                 )
 
     @staticmethod
-    def create_splits(output_dir, image_dir, test_dir, seed, n_splits=5):
+    def create_splits(output_dir, image_dir, test_dir, seed, n_splits=5) -> None:
         """Saves a pickle file containing the splits for k-fold cv on the dataset
 
         Args:
             output_dir: The output directory where to save the splits file, i.e. the dataset directory
-            image_dir: The directory of the preprocessed images
+            image_dir: The directory of the preprocessed training/ validation images
+            test_dir: The directory of the preprocessed test images
             seed: The seed for the splits
             n_splits: Number of folds
         """
@@ -309,7 +310,6 @@ class NumpyDataLoader(SlimDataLoaderBase):
         batch_size: int = 16,
         file_pattern: str = "*.npy",
         subject_ids: Optional[List[str]] = None,
-        slice_offset: int = 0,
         training: bool = True,
         num_raters: int = 1,
     ):
@@ -323,7 +323,6 @@ class NumpyDataLoader(SlimDataLoaderBase):
             batch_size (int): Batch size.
             file_pattern (str): Pattern to match os.walk filenames against when resolving possible subjects/slices.
             subject_ids (list/array): Which subject IDs to load.
-            slice_offset (int): The offset that is not considered for the 2D slices
         """
         self.samples = get_data_samples(
             base_dir=base_dir,
@@ -355,28 +354,23 @@ class NumpyDataLoader(SlimDataLoaderBase):
         data = []
         image_paths = []
         label_paths = []
-        # slice_idxs = []
         labels = []
 
         for sample in samples:
             image_array = np.load(sample["image_path"], mmap_mode="r")
             image_array = np.expand_dims(image_array, axis=0)
-            # image_slice = np.expand_dims(image_array[sample["slice_idx"]], axis=0)
             data.append(image_array)
             image_paths.append(sample["image_path"])
             if sample["label_path"] is not None:
                 label_array = np.load(sample["label_path"], mmap_mode="r")
                 label_array = np.expand_dims(label_array, axis=0)
-                # slice_label = np.expand_dims(label_array[sample["slice_idx"]], axis=0)
                 labels.append(label_array)
                 label_paths.append(sample["label_path"])
-            # slice_idxs.append(sample["slice_idx"])
 
         batch = {
             "data": np.asarray(data),
             "image_paths": image_paths,
             "label_paths": label_paths,
-            # "slice_idxs": slice_idxs,
         }
         if len(labels) > 0:
             batch["seg"] = np.asarray(labels)
@@ -408,6 +402,8 @@ def get_data_samples(
         base_dir (str): Directory where preprocessed numpy files reside. Should contain subfolders imagesTr and labelsTr
         pattern (str): Pattern to match os.walk filenames against.
         subject_ids (list/array): Which subject IDs to load.
+        num_raters (int): Number of segmentation variants
+        test (bool): Whether testing or training is done
 
     Returns:
         samples [List[dict]]: All possible slices for each subject id.

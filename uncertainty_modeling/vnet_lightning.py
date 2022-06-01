@@ -117,7 +117,7 @@ class VNetExperiment(pl.LightningModule):
             x: The input batch
 
         Returns:
-            [torch.Tensor]: The result of the U-Net
+            [torch.Tensor]: The result of the V-Net
         """
         return self.vnet(x)
 
@@ -206,22 +206,6 @@ class VNetExperiment(pl.LightningModule):
         )
         test_dice = dice_score(output_softmax, target)
         self.test_datacarrier.concat_data(batch=batch, softmax_pred=output_softmax)
-        if batch_idx == 1:
-            self.predicted_segmentation_test = torch.argmax(output, dim=1, keepdim=True)
-            self.target_segmentation_test = batch["seg"].long()
-            self.batch_data = batch["data"]
-            grid = torchvision.utils.make_grid(self.batch_data)
-            self.logger.experiment.add_image(
-                "test/Test_Input_Batch", grid, self.current_epoch
-            )
-            grid = torchvision.utils.make_grid(self.predicted_segmentation_test)
-            self.logger.experiment.add_image(
-                "test/Test_Predicted_Segmentations", grid, self.current_epoch
-            )
-            grid = torchvision.utils.make_grid(self.target_segmentation_test)
-            self.logger.experiment.add_image(
-                "test/Test_Target_Segmentations", grid, self.current_epoch
-            )
 
         log = {"test/test_loss": test_loss, "test/test_dice": test_dice}
         self.log_dict(log, prog_bar=False, on_step=False, on_epoch=True, logger=True)
