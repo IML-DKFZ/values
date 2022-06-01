@@ -22,7 +22,7 @@ from loss_modules import SoftDiceLoss
 from tqdm import tqdm
 
 
-def test_cli(config_file: str = "./test_vnet_defaults.yml") -> Namespace:
+def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
     """
     Set the arguments for testing
     Args:

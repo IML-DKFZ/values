@@ -16,7 +16,7 @@ from pytorch_lightning.callbacks import TQDMProgressBar
 
 
 def main_cli(
-    config_file: str = "./vnet_defaults.yml",
+    config_file: str = "configs/vnet_defaults.yml",
     get_nested_dict: bool = False,
 ) -> Tuple[Namespace, Optional[dict]]:
     """Setting hparams and environment up for the main
@@ -152,5 +152,5 @@ def main(hparams: Namespace, nested_dict: Optional[dict] = None):
 
 
 if __name__ == "__main__":
-    hparams, nested_dict = main_cli(config_file="./vnet_defaults.yml")
+    hparams, nested_dict = main_cli(config_file="configs/vnet_defaults.yml")
     main(hparams, nested_dict=nested_dict)
