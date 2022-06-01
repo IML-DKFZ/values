@@ -1,28 +1,6 @@
 from __future__ import annotations
 
-import os
-from typing import Optional, List
-import random
-import pickle
-import tarfile
-import fnmatch
-import numpy as np
-import pytorch_lightning as pl
-from sklearn.model_selection import KFold
-from argparse import ArgumentParser
-
-from google_drive_downloader import GoogleDriveDownloader as Gdd
-
-from medpy.io import load
-from batchgenerators.augmentations.utils import pad_nd_image
-from batchgenerators.transforms.abstract_transforms import Compose
-from batchgenerators.transforms.spatial_transforms import (
-    MirrorTransform,
-    ResizeTransform,
-    SpatialTransform,
-)
-from batchgenerators.transforms.utility_transforms import NumpyToTensor
-from batchgenerators.dataloading.data_loader import SlimDataLoaderBase
+from typing import Optional
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 
 from msd_datamodule import MSDDataModule

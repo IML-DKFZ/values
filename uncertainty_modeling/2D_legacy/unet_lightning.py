@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 from torchmetrics.functional.classification import dice_score
 
 from unet_module import UNet
-from loss_modules import SoftDiceLoss
+from uncertainty_modeling.loss_modules import SoftDiceLoss
 from data_carrier import DataCarrier
 
 

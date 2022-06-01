@@ -16,9 +16,9 @@ from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.spatial_transforms import ResizeTransform
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
-from uncertainty_modeling.unet_module import UNet
+from uncertainty_modeling.loss_modules import SoftDiceLoss
+from unet_module import UNet
 from data_carrier import DataCarrier
-from loss_modules import SoftDiceLoss
 from tqdm import tqdm
 from torchvision import transforms
 

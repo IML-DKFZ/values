@@ -13,7 +13,7 @@ from torchmetrics.functional.classification import dice_score
 
 from uncertainty_modeling.vnet_module import VNet
 from loss_modules import SoftDiceLoss
-from data_carrier import DataCarrier
+from data_carrier_3D import DataCarrier3D
 
 
 class VNetExperiment(pl.LightningModule):
@@ -54,7 +54,7 @@ class VNetExperiment(pl.LightningModule):
 
         self.val_loss_avg = 0.0
         self.val_avg_acc = 0.0
-        self.test_datacarrier = DataCarrier()
+        self.test_datacarrier = DataCarrier3D()
 
     def configure_optimizers(self) -> Tuple[List[optim.Adam], List[dict]]:
         """Define the optimizers and learning rate schedulers. Adam is used as optimizer.
