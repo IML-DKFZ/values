@@ -229,7 +229,7 @@ class ToyDataModule3D(pl.LightningDataModule):
             base_dir=os.path.join(
                 self.data_input_dir, self.dataset_name, "preprocessed"
             ),
-            batch_size=self.batch_size,
+            batch_size=1,
             file_pattern="*.npy",
             subject_ids=self.val_keys,
             num_raters=self.num_raters,

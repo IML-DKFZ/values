@@ -162,7 +162,8 @@ class VNetExperiment(pl.LightningModule):
         output_softmax = F.softmax(output, dim=1)
 
         target = batch["seg"].long().squeeze()
-
+        if len(target.size()) == 3:
+            target = target.unsqueeze(0)
         # Visualization of Segmentations
         # TODO: Visualization for 3D?
         # if batch_idx == 1:
