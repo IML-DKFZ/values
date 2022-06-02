@@ -8,6 +8,7 @@ from typing import Optional, List
 import numpy as np
 import pytorch_lightning as pl
 from batchgenerators.augmentations.crop_and_pad_augmentations import crop
+from batchgenerators.augmentations.utils import pad_nd_image
 from batchgenerators.dataloading.data_loader import DataLoader
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.transforms.abstract_transforms import Compose
@@ -25,6 +26,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         data_num_folds: int = 5,
         data_fold_id: int = 0,
         batch_size: int = 16,
+        patch_size: int = 64,
         num_workers: int = 8,
         seed: int = 42,
         *args,
@@ -40,6 +42,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         self.data_num_folds = data_num_folds
         self.data_fold_id = data_fold_id
         self.batch_size = batch_size
+        self.patch_size = patch_size
         self.num_workers = num_workers
         self.seed = seed
 
@@ -130,9 +133,11 @@ class ToyDataModule3D(pl.LightningDataModule):
             nii_files = subfiles(image_dir, suffix=".nii.gz", join=False)
 
             all_images = []
+            all_labels = []
             for f in nii_files:
                 image, _ = load(os.path.join(image_dir, f))
                 all_images.append(image)
+                raters = []
                 for rater in range(self.num_raters):
                     label_name = f.replace(
                         ".nii.gz", "_{}.nii.gz".format(str(rater).zfill(2))
@@ -143,22 +148,40 @@ class ToyDataModule3D(pl.LightningDataModule):
                             label_name,
                         )
                     )
-                    np.save(
-                        os.path.join(
-                            output_dir_labels, label_name.split(".")[0] + ".npy"
-                        ),
-                        label,
-                    )
+                    raters.append(label)
+                all_labels.append(raters)
 
-            for image, f in zip(all_images, nii_files):
+            for image, label, f in zip(all_images, all_labels, nii_files):
                 # normalize images
                 image = (image - image.mean()) / (
                     image.std() + 1e-8
                 )  # TODO using standard z score norm now, keep in mind
-
+                pad_size_x = image.shape[0] + (image.shape[0] % (self.patch_size // 2))
+                pad_size_y = image.shape[1] + (image.shape[1] % (self.patch_size // 2))
+                pad_size_z = image.shape[2] + (image.shape[2] % (self.patch_size // 2))
+                image = pad_nd_image(
+                    image,
+                    (pad_size_x, pad_size_y, pad_size_z),
+                    "constant",
+                    kwargs={"constant_values": image.min()},
+                )
                 np.save(
                     os.path.join(output_dir_images, f.split(".")[0] + ".npy"), image
                 )
+                for rater in range(len(label)):
+                    label_rater = pad_nd_image(
+                        label[rater],
+                        (pad_size_x, pad_size_y, pad_size_z),
+                        "constant",
+                        kwargs={"constant_values": label[rater].min()},
+                    )
+                    np.save(
+                        os.path.join(
+                            output_dir_labels,
+                            f.split(".")[0] + "_{}.npy".format(str(rater).zfill(2)),
+                        ),
+                        label_rater,
+                    )
 
     @staticmethod
     def create_splits(output_dir, image_dir, test_dir, seed, n_splits=5) -> None:
@@ -546,26 +569,15 @@ def get_val_test_data_samples(
             label_path = random.choice(label_paths) if len(label_paths) > 0 else None
 
             image_array = np.load(image_path, mmap_mode="r")
-            pad_size_x = image_array.shape[0] + (
-                image_array.shape[0] % (patch_size // 2)
-            )
-            pad_size_y = image_array.shape[1] + (
-                image_array.shape[1] % (patch_size // 2)
-            )
-            pad_size_z = image_array.shape[2] + (
-                image_array.shape[2] % (patch_size // 2)
-            )
 
-            start_idx_x = 0
-            start_idx_y = 0
             start_idx_z = 0
 
             crop_indices = []
-            while start_idx_z <= pad_size_z - patch_size:
+            while start_idx_z <= image_array.shape[2] - patch_size:
                 start_idx_y = 0
-                while start_idx_y <= pad_size_y - patch_size:
+                while start_idx_y <= image_array.shape[1] - patch_size:
                     start_idx_x = 0
-                    while start_idx_x <= pad_size_x - patch_size:
+                    while start_idx_x <= image_array.shape[0] - patch_size:
                         crop_indices.append(
                             (
                                 (start_idx_x, start_idx_x + patch_size),
@@ -582,9 +594,6 @@ def get_val_test_data_samples(
                     {
                         "image_path": image_path,
                         "label_path": label_path,
-                        "pad_size_x": pad_size_x,
-                        "pad_size_y": pad_size_y,
-                        "pad_size_z": pad_size_z,
                         "crop_idx": crop_index,
                     }
                 )
