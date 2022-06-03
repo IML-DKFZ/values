@@ -17,7 +17,7 @@ from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
 from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
-from uncertainty_modeling.vnet_module import VNet
+from uncertainty_modeling.models.vnet_module import VNet
 from loss_modules import SoftDiceLoss
 from tqdm import tqdm
 

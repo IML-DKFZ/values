@@ -1,6 +1,5 @@
 import os
 from typing import Optional, Tuple, List
-import torchvision
 from argparse import Namespace, ArgumentParser
 import yaml
 
@@ -11,7 +10,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 import pytorch_lightning as pl
 from torchmetrics.functional.classification import dice_score
 
-from uncertainty_modeling.vnet_module import VNet
+from uncertainty_modeling.models.vnet_module import VNet
 from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
 
