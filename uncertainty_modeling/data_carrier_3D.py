@@ -51,13 +51,25 @@ class DataCarrier3D:
         input = {}
         input["image_paths"] = [sample["image_path"]]
         input["label_paths"] = [sample["label_path"]]
+        input["crop_idx"] = [sample["crop_idx"]]
 
         image_array = np.load(sample["image_path"], mmap_mode="r")
-        input["data"] = np.expand_dims(image_array, 0)
+        input["org_image_size"] = [image_array.shape]
+        image_patch = image_array[
+            sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
+            sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
+            sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
+        ]
+        input["data"] = np.expand_dims(image_patch, 0)
 
         if sample["label_path"] is not None:
             label_array = np.load(sample["label_path"], mmap_mode="r")
-            input["seg"] = np.expand_dims(label_array, 0)
+            label_patch = label_array[
+                sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
+                sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
+                sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
+            ]
+            input["seg"] = np.expand_dims(label_patch, 0)
         return input
 
     def concat_data(self, batch: Dict, softmax_pred: torch.Tensor) -> None:
@@ -70,23 +82,50 @@ class DataCarrier3D:
             softmax_pred: softmax prediction to insert in self.data
         """
         for index, image_path in enumerate(batch["image_paths"]):
-            self.data[image_path] = {}
-            self.data[image_path]["label_path"] = batch["label_paths"][index]
-            self.data[image_path]["data"] = (
+            if image_path not in self.data:
+                self.data[image_path] = {}
+                self.data[image_path]["label_path"] = batch["label_paths"][index]
+                self.data[image_path]["softmax_pred"] = np.zeros(
+                    (2, *batch["org_image_size"][index])
+                )
+                self.data[image_path]["num_predictions"] = np.zeros(
+                    (2, *batch["org_image_size"][index])
+                )
+
+                self.data[image_path]["data"] = np.zeros(batch["org_image_size"][index])
+
+                self.data[image_path]["seg"] = np.zeros(batch["org_image_size"][index])
+
+            crop_idx = batch["crop_idx"][index]
+            self.data[image_path]["data"][
+                crop_idx[0][0] : crop_idx[0][1],
+                crop_idx[1][0] : crop_idx[1][1],
+                crop_idx[2][0] : crop_idx[2][1],
+            ] += (
                 batch["data"][index].cpu().detach().numpy().squeeze()
             )
-
-            self.data[image_path]["seg"] = (
+            self.data[image_path]["seg"][
+                crop_idx[0][0] : crop_idx[0][1],
+                crop_idx[1][0] : crop_idx[1][1],
+                crop_idx[2][0] : crop_idx[2][1],
+            ] += (
                 batch["seg"][index].cpu().detach().numpy().squeeze()
             )
-
-            self.data[image_path]["softmax_pred"] = (
+            self.data[image_path]["softmax_pred"][
+                :,
+                crop_idx[0][0] : crop_idx[0][1],
+                crop_idx[1][0] : crop_idx[1][1],
+                crop_idx[2][0] : crop_idx[2][1],
+            ] += (
                 softmax_pred[index].cpu().detach().numpy()
             )
-            predicted_segmentation = torch.argmax(softmax_pred[index], dim=0)
-            self.data[image_path]["pred_seg"] = (
-                predicted_segmentation.cpu().detach().numpy()
-            )
+            self.data[image_path]["num_predictions"][
+                :,
+                crop_idx[0][0] : crop_idx[0][1],
+                crop_idx[1][0] : crop_idx[1][1],
+                crop_idx[2][0] : crop_idx[2][1],
+            ] += 1
+
 
     def save_data(
         self,
@@ -105,10 +144,18 @@ class DataCarrier3D:
         """
         self._create_save_dirs(root_dir=root_dir, exp_name=exp_name, version=version)
         for key, value in self.data.items():
-            data = np.asarray(value["data"])
-            gt_seg = np.asarray(value["seg"])
-            softmax_pred = np.asarray(value["softmax_pred"])
-            pred_seg = np.asarray(value["pred_seg"])
+            data = np.asarray(
+                value["data"] / np.clip(value["num_predictions"], 1, None)[0]
+            )
+            gt_seg = np.asarray(
+                value["seg"] / np.clip(value["num_predictions"], 1, None)[0]
+            )
+            mean_softmax = value["softmax_pred"] / np.clip(
+                value["num_predictions"], 1, None
+            )
+            softmax_pred = np.asarray(mean_softmax)
+            pred_seg = np.argmax(mean_softmax, axis=0)
+            pred_seg = np.asarray(pred_seg)
 
             if org_data_path:
                 _, header = load(

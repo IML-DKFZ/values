@@ -185,7 +185,9 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
     for key, value in test_datacarrier.data.items():
         softmax_pred = torch.from_numpy(value["softmax_pred"])
         softmax_pred = torch.unsqueeze(softmax_pred, 0)
-        gt_seg = torch.from_numpy(np.asarray(value["seg"]))
+        gt_seg = torch.from_numpy(
+            np.asarray(value["seg"] / np.clip(value["num_predictions"], 1, None)[0])
+        )
         gt_seg = torch.unsqueeze(gt_seg, 0).type(torch.LongTensor)
         metrics_dict = calculate_test_metrics(softmax_pred, gt_seg)
         test_datacarrier.data[key]["metrics"] = metrics_dict
