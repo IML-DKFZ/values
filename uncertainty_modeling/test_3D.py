@@ -242,6 +242,8 @@ def run_test(args: Namespace) -> None:
         subject_ids=subject_ids,
         test=True,
         num_raters=hparams["num_raters"],
+        patch_size=hparams["patch_size"],
+        patch_overlap=hparams["patch_overlap"],
     )
 
     model = load_model_from_checkpoint(checkpoint)

@@ -126,7 +126,6 @@ class DataCarrier3D:
                 crop_idx[2][0] : crop_idx[2][1],
             ] += 1
 
-
     def save_data(
         self,
         root_dir: str,

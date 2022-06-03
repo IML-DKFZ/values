@@ -27,6 +27,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         data_fold_id: int = 0,
         batch_size: int = 16,
         patch_size: int = 64,
+        patch_overlap: float = 1,
         num_workers: int = 8,
         seed: int = 42,
         *args,
@@ -43,6 +44,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         self.data_fold_id = data_fold_id
         self.batch_size = batch_size
         self.patch_size = patch_size
+        self.patch_overlap = patch_overlap
         self.num_workers = num_workers
         self.seed = seed
 
@@ -156,9 +158,15 @@ class ToyDataModule3D(pl.LightningDataModule):
                 image = (image - image.mean()) / (
                     image.std() + 1e-8
                 )  # TODO using standard z score norm now, keep in mind
-                pad_size_x = image.shape[0] + (image.shape[0] % (self.patch_size // 2))
-                pad_size_y = image.shape[1] + (image.shape[1] % (self.patch_size // 2))
-                pad_size_z = image.shape[2] + (image.shape[2] % (self.patch_size // 2))
+                pad_size_x = image.shape[0] + (
+                    image.shape[0] % int(self.patch_size * self.patch_overlap)
+                )
+                pad_size_y = image.shape[1] + (
+                    image.shape[1] % int(self.patch_size * self.patch_overlap)
+                )
+                pad_size_z = image.shape[2] + (
+                    image.shape[2] % int(self.patch_size * self.patch_overlap)
+                )
                 image = pad_nd_image(
                     image,
                     (pad_size_x, pad_size_y, pad_size_z),
@@ -325,6 +333,18 @@ class ToyDataModule3D(pl.LightningDataModule):
             default=16,
             help="Batch size.",
         )
+        parser.add_argument(
+            "--patch_size",
+            type=int,
+            default=64,
+            help="Patch size.",
+        )
+        parser.add_argument(
+            "--patch_overlap",
+            type=float,
+            default=1,
+            help="Ratio of patch overlap. 1 means no patch overlap, 0.5 half the patch size overlap etc.",
+        )
         return parser
 
 
@@ -334,6 +354,7 @@ class NumpyDataLoader(DataLoader):
         base_dir: str,
         batch_size: int = 16,
         patch_size: int = 64,
+        patch_overlap: float = 1,
         file_pattern: str = "*.npy",
         subject_ids: Optional[List[str]] = None,
         training: bool = True,
@@ -365,6 +386,8 @@ class NumpyDataLoader(DataLoader):
                 subject_ids=subject_ids,
                 num_raters=num_raters,
                 test=False,
+                patch_size=patch_size,
+                patch_overlap=patch_overlap,
             )
         super(NumpyDataLoader, self).__init__(self.samples, batch_size)
 
@@ -522,6 +545,7 @@ def get_val_test_data_samples(
     num_raters: int = 1,
     test=False,
     patch_size: int = 64,
+    patch_overlap: float = 1,
 ) -> List[dict]:
     """
     Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
@@ -585,9 +609,9 @@ def get_val_test_data_samples(
                                 (start_idx_z, start_idx_z + patch_size),
                             )
                         )
-                        start_idx_x += patch_size // 2
-                    start_idx_y += patch_size // 2
-                start_idx_z += patch_size // 2
+                        start_idx_x += int(patch_size * patch_overlap)
+                    start_idx_y += int(patch_size * patch_overlap)
+                start_idx_z += int(patch_size * patch_overlap)
 
             for crop_index in crop_indices:
                 samples.append(
