@@ -1,6 +1,8 @@
 import os
 from typing import Optional, Tuple, List
 from argparse import Namespace, ArgumentParser
+
+import hydra
 import yaml
 
 import torch
@@ -8,9 +10,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import pytorch_lightning as pl
+from omegaconf import DictConfig, OmegaConf
 from torchmetrics.functional.classification import dice_score
 
-from uncertainty_modeling.models.vnet_module import VNet
 from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
 
@@ -18,7 +20,7 @@ from data_carrier_3D import DataCarrier3D
 class VNetExperiment(pl.LightningModule):
     def __init__(
         self,
-        hparams: Namespace,
+        hparams: DictConfig,
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-6,
         nested_hparam_dict: Optional[dict] = None,
@@ -39,12 +41,10 @@ class VNetExperiment(pl.LightningModule):
             hparams = Namespace(**hparams)
         if "DATASET_LOCATION" in os.environ.keys():
             hparams.data_input_dir = os.environ["DATASET_LOCATION"]
-        self.save_hyperparameters(hparams)
+        self.save_hyperparameters(OmegaConf.to_container(hparams))
         self.nested_hparam_dict = nested_hparam_dict
 
-        self.vnet = VNet(
-            num_classes=hparams.num_classes,
-        )
+        self.model = hydra.utils.instantiate(hparams.model)
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
 
@@ -107,7 +107,9 @@ class VNetExperiment(pl.LightningModule):
             sub_hparams = Namespace(**sub_hparams)
             self.logger.log_hyperparams(sub_hparams, metrics=metric_placeholder)
         else:
-            self.logger.log_hyperparams(self.hparams, metrics=metric_placeholder)
+            self.logger.log_hyperparams(
+                Namespace(**self.hparams), metrics=metric_placeholder
+            )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the network
@@ -118,7 +120,7 @@ class VNetExperiment(pl.LightningModule):
         Returns:
             [torch.Tensor]: The result of the V-Net
         """
-        return self.vnet(x)
+        return self.model(x)
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Perform a training step, i.e. pass a batch to the network and calculate the loss.

@@ -1,156 +1,63 @@
-import importlib
 import os
-from typing import Optional, Tuple
 
+import hydra.utils
 import torch
-import yaml
 from argparse import Namespace, ArgumentParser
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import TensorBoardLogger
-
-from uncertainty_modeling.toy_datamodule_3D import ToyDataModule3D
+from omegaconf import DictConfig, OmegaConf, open_dict
 from uncertainty_modeling.vnet_lightning import VNetExperiment
 
-from pytorch_lightning.callbacks import TQDMProgressBar
 
-
-def main_cli(
-    config_file: str = "configs/vnet_defaults.yml",
-    get_nested_dict: bool = False,
-) -> Tuple[Namespace, Optional[dict]]:
-    """Setting hparams and environment up for the main
-
-    Args:
-        config_file (str, optional): path to hyperpameter defaults from uncertainty_modeling. Defaults to './unet_defaults.yml'.
-        get_nested_dict (bool, optional): if True: returns nested subdict to be saved. Defaults to False.
-
-    Returns:
-        hparams [Namespace]: all hyperparameters for Trainer, Module, Data and Logger
-        nested_dict [dict] : specified hparams which will be saved for easy access
-    """
+def pl_cli():
     parser = ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
-    parser = VNetExperiment.add_module_specific_args(parser)
-    parser = ToyDataModule3D.add_data_specific_args(parser)
-    parser.add_argument(
-        "--exp_name", type=str, default="U-Net-Experiment", help="Experiment name."
-    )
-    parser.add_argument("--version", type=str, default=None, help="Experiment version.")
-    parser.add_argument(
-        "--save_dir",
-        type=str,
-        default="/home/finja/Documents/SSL-SEG/experiments/debug",
-        help="If given, uses this string to create directory to save results in "
-        "(be careful, this can overwrite previous results); "
-        "otherwise saves logs according to time-stamp",
-    )
-    parser.add_argument(
-        "--datamodule_module_name",
-        type=str,
-        default="hippocampus_datamodule",
-        help="The module name of the datamodule (i.e. the import path)",
-    )
-    parser.add_argument(
-        "--datamodule_class_name",
-        type=str,
-        default="HippocampusDataModule",
-        help="The class name of the datamodule",
-    )
-
-    with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-
-    parser.set_defaults(**config)
-
-    hparams = parser.parse_args()
-
-    # Use Environment Variables if accessible
-    if "DATASET_LOCATION" in os.environ.keys():
-        hparams.data_input_dir = os.environ["DATASET_LOCATION"]
-    if "EXPERIMENT_LOCATION" in os.environ.keys():
-        hparams.save_dir = os.environ["EXPERIMENT_LOCATION"]
-    if "LSB_JOBID" in os.environ.keys():
-        hparams.version = os.environ["LSB_JOBID"]
-
-    if hparams.seed is not None:
-        pl.seed_everything(hparams.seed)
-        # For 3d Models change determinitic to false
-        torch.use_deterministic_algorithms(True, warn_only=True)
-
-    if get_nested_dict is False:
-        return hparams, None
-    else:
-        nested_dict = generate_nested_dict(hparams)
-        return hparams, nested_dict
+    hparams, _ = parser.parse_known_args()
+    return hparams
 
 
-def generate_nested_dict(hparams: Namespace) -> dict:
-    """Generates a nested dictionary for easy readability.
-    Takes all hparams from Module and DataModule, as well as number of epochs from pl.Trainer
-
-    Args:
-        hparams ([Namesapce]): all hyperparameters
-
-    Returns:
-        [dict]: nested dictionary with subset of hyperparameters
-    """
-    parser_module = ArgumentParser()
-    parser_module = VNetExperiment.add_module_specific_args(parser_module)
-    hparams_module, _ = parser_module.parse_known_args()
-
-    parser_data = ArgumentParser()
-    parser_data = ToyDataModule3D.add_data_specific_args(parser_data)
-    hparams_data, _ = parser_data.parse_known_args()
-
-    hparams_train = Namespace()
-    hparams_train.max_epochs = hparams.max_epochs
-
-    nested_dict = {
-        "train": vars(hparams_train),
-        "data": vars(hparams_data),
-        "module": vars(hparams_module),
-    }
-    return nested_dict
-
-
-def main(hparams: Namespace, nested_dict: Optional[dict] = None):
+@hydra.main(config_path="configs", config_name="default_config")
+def main(cfg_hydra: DictConfig):
     """Uses the pl.Trainer to fit & test the model
 
     Args:
         hparams ([Namespace]): hparams
         nested_dict ([dict], optional): Subset of hparams for saving. Defaults to None.
     """
+    config = pl_cli()
+    config = OmegaConf.create(vars(config))
+    with open_dict(cfg_hydra):
+        config.merge_with(cfg_hydra)
+    config = cfg_hydra
+    # Use Environment Variables if accessible
+    if "DATASET_LOCATION" in os.environ.keys():
+        config.data_input_dir = os.environ["DATASET_LOCATION"]
+    if "EXPERIMENT_LOCATION" in os.environ.keys():
+        config.save_dir = os.environ["EXPERIMENT_LOCATION"]
+    if "LSB_JOBID" in os.environ.keys():
+        config.version = os.environ["LSB_JOBID"]
 
-    logger = TensorBoardLogger(
-        save_dir=hparams.save_dir, version=hparams.version, name=hparams.exp_name
+    if config.seed is not None:
+        pl.seed_everything(config.seed)
+        torch.use_deterministic_algorithms(True, warn_only=True)
+
+    logger = hydra.utils.instantiate(config.logger, version=config.version)
+    progress_bar = hydra.utils.instantiate(config.progress_bar)
+    trainer = pl.Trainer.from_argparse_args(
+        Namespace(**config),
+        logger=logger,
+        profiler="simple",
+        callbacks=progress_bar,
     )
 
-    if hparams.progress_bar_refresh_rate is not None:
-        progress_bar = TQDMProgressBar(refresh_rate=hparams.progress_bar_refresh_rate)
-        delattr(hparams, "progress_bar_refresh_rate")
-        trainer = pl.Trainer.from_argparse_args(
-            hparams, logger=logger, profiler="simple", callbacks=progress_bar
-        )
-    else:
-        trainer = pl.Trainer.from_argparse_args(
-            hparams, logger=logger, profiler="simple"
-        )
-
-    DataModule = getattr(
-        importlib.import_module(hparams.datamodule_module_name),
-        hparams.datamodule_class_name,
+    dm = hydra.utils.instantiate(
+        config.datamodule, data_input_dir=config.data_input_dir
     )
-    dm = DataModule(**hparams.__dict__)
-    hparams.dataset_name = dm.dataset_name
-    hparams.num_classes = dm.num_classes
-
     dm.prepare_data()
     dm.setup("fit")
-    model = VNetExperiment(hparams, nested_dict=nested_dict, **vars(hparams))
+    model = VNetExperiment(config, **vars(config))
     trainer.fit(model, datamodule=dm)
 
 
 if __name__ == "__main__":
-    hparams, nested_dict = main_cli(config_file="configs/vnet_defaults.yml")
-    main(hparams, nested_dict=nested_dict)
+    main()

@@ -96,11 +96,11 @@ def dir_and_subjects_from_train(
         if args.data_input_dir is not None
         else hparams["data_input_dir"]
     )
-    dataset_name = hparams["dataset_name"]
+    dataset_name = hparams["datamodule"]["dataset_name"]
 
     with open(os.path.join(data_input_dir, dataset_name, "splits.pkl"), "rb") as f:
         splits = pickle.load(f)
-    fold = hparams["data_fold_id"]
+    fold = hparams["datamodule"]["data_fold_id"]
     subject_ids = splits[fold]["test"]
 
     test_data_dir = os.path.join(data_input_dir, dataset_name, "preprocessed")
@@ -122,7 +122,7 @@ def load_model_from_checkpoint(checkpoint: Dict) -> VNet:
     for k, v in checkpoint["state_dict"].items():
         state_dict[".".join(k.split(".")[1:])] = v
 
-    model = VNet(hparams["num_classes"])
+    model = VNet(hparams["model"]["num_classes"])
     model.load_state_dict(state_dict=state_dict)
     return model
 
@@ -214,7 +214,9 @@ def save_results(
         root_dir=save_dir,
         exp_name=hparams["exp_name"],
         version=hparams["version"],
-        org_data_path=os.path.join(data_input_dir, hparams["dataset_name"], "imagesTr"),
+        org_data_path=os.path.join(
+            data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTr"
+        ),
     )
     test_datacarrier.log_metrics()
 
@@ -241,9 +243,9 @@ def run_test(args: Namespace) -> None:
         base_dir=test_data_dir,
         subject_ids=subject_ids,
         test=True,
-        num_raters=hparams["num_raters"],
-        patch_size=hparams["patch_size"],
-        patch_overlap=hparams["patch_overlap"],
+        num_raters=hparams["datamodule"]["num_raters"],
+        patch_size=hparams["datamodule"]["patch_size"],
+        patch_overlap=hparams["datamodule"]["patch_overlap"],
     )
 
     model = load_model_from_checkpoint(checkpoint)
