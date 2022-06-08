@@ -145,6 +145,7 @@ class VNetExperiment(pl.LightningModule):
             on_step=True,
             on_epoch=True,
             logger=True,
+            batch_size=self.hparams.batch_size,
         )
         return loss
 

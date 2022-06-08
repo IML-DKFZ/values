@@ -295,7 +295,11 @@ class VNet(nn.Module):
         return layer
 
     def output_conv(
-        self, in_channels: int, out_channels: int, kernel_size: int = 1
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 5,
+        kernel_size_out: int = 1,
     ) -> nn.Sequential:
         """
         Output convolution that is performed at the end of the forward pass consisting of convolution, BatchNorm and
@@ -308,9 +312,10 @@ class VNet(nn.Module):
             layer (nn.Sequential): The convolution block to pass the input through
         """
         layer = nn.Sequential(
-            nn.Conv3d(in_channels, out_channels, kernel_size, stride=1),
+            nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, padding=2),
             nn.BatchNorm3d(out_channels),
             self.activation,
+            nn.Conv3d(out_channels, out_channels, kernel_size_out, stride=1),
         )
         return layer
 
