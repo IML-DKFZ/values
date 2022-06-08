@@ -2,6 +2,7 @@ import os
 import pickle
 from typing import Dict, Tuple, List
 
+import hydra
 import yaml
 from collections import OrderedDict
 from argparse import Namespace, ArgumentParser
@@ -122,7 +123,7 @@ def load_model_from_checkpoint(checkpoint: Dict) -> VNet:
     for k, v in checkpoint["state_dict"].items():
         state_dict[".".join(k.split(".")[1:])] = v
 
-    model = VNet(hparams["model"]["num_classes"])
+    model = hydra.utils.instantiate(hparams["model"])
     model.load_state_dict(state_dict=state_dict)
     return model
 
