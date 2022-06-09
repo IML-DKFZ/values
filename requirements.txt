@@ -1,8 +1,15 @@
 batchgenerators>=0.23
 googledrivedownloader>=0.4
+hydra-core==1.2.0
 MedPy>=0.4.0
+numpy==1.22.3
+omegaconf==2.2.2
 pytorch-lightning>=1.5.10
-tensorboard>=2.8.0
+PyYAML==6.0
+scikit_learn==1.1.1
+setuptools==61.2.0
 torch>=1.11.0
-torchvision>=0.12.0
 torchmetrics>=0.7.2
+torchvision>=0.12.0
+tqdm==4.64.0
+tensorboard>=2.8.0
