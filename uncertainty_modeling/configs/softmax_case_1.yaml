@@ -1,12 +1,12 @@
 defaults:
   - datamodule: case1_config
-  - model: unet3D_config
-exp_name: "Toy-Data-Test"
+  - model: vnet_config
+exp_name: "Softmax-Case-1"
 version: null
-data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
-save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
+data_input_dir: "/dkfz/cluster/gpu/data/OE0612/kahl/toy-data"
+save_dir: "/dkfz/cluster/gpu/checkpoints/OE0612/kahl/toy-experiments"
 seed: 123
-max_epochs: 2
+max_epochs: 50
 batch_size: 8
 learning_rate: 3.0e-4
 weight_decay: 10.0e-6

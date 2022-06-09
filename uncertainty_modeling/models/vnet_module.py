@@ -167,7 +167,7 @@ class VNet(nn.Module):
         self,
         num_classes: int = 2,
         in_channels: int = 1,
-        initial_filter_size: int = 16,
+        initial_filter_size: int = 8,
         kernel_size: int = 5,
         kernel_size_down=2,
         kernel_size_up: int = 2,
@@ -186,6 +186,7 @@ class VNet(nn.Module):
                                                  Defaults to "elu".
         """
         super(VNet, self).__init__()
+        self.initial_filter_size = initial_filter_size
         self.in_channels = in_channels
         self.in_conv = self.input_conv(in_channels, initial_filter_size, kernel_size)
         self.activation = nn.ELU() if activation_function == "elu" else nn.PReLU()
@@ -330,7 +331,7 @@ class VNet(nn.Module):
         """
         # Encoder
         in_conv = self.in_conv(x)
-        repeat_num = 16 // self.in_channels
+        repeat_num = self.initial_filter_size // self.in_channels
         x16 = x.repeat([1, repeat_num, 1, 1, 1][:5])
         residual_1 = self.activation(x16 + in_conv)
         down_conv_1 = self.down_conv_1(residual_1)

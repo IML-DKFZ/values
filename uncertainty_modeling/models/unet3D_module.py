@@ -7,7 +7,7 @@ class UNet3D(nn.Module):
         self,
         num_classes: int,
         in_channels: int = 1,
-        initial_filter_size: int = 64,
+        initial_filter_size: int = 8,
         kernel_size: int = 3,
         do_instancenorm: bool = True,
     ):
