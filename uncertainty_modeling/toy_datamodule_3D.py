@@ -403,8 +403,9 @@ class NumpyDataLoader(DataLoader):
             batch (dict): The generated batch
         """
         if self.training:
-            idx = self.get_indices()
-            samples = [self._data[i] for i in idx]
+            samples = random.sample(self._data, self.batch_size)
+            # idx = self.get_indices()
+            # samples = [self._data[i] for i in idx]
         else:
             samples = [
                 x
