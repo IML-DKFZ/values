@@ -11,7 +11,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf
-from torchmetrics.functional.classification import dice_score
+from torchmetrics.functional.classification import dice
 
 from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
@@ -181,7 +181,7 @@ class VNetExperiment(pl.LightningModule):
         #     )
 
         val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
-        val_dice = dice_score(output_softmax, target)
+        val_dice = dice(output_softmax, target, ignore_index=0)
 
         log = {"validation/val_loss": val_loss, "validation/val_dice": val_dice}
         self.log_dict(log, prog_bar=False, on_step=False, on_epoch=True, logger=True)
@@ -207,7 +207,7 @@ class VNetExperiment(pl.LightningModule):
         test_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
             output, target
         )
-        test_dice = dice_score(output_softmax, target)
+        test_dice = dice(output_softmax, target, ignore_index=0)
         self.test_datacarrier.concat_data(batch=batch, softmax_pred=output_softmax)
 
         log = {"test/test_loss": test_loss, "test/test_dice": test_dice}
