@@ -426,14 +426,15 @@ class NumpyDataLoader(DataLoader):
                 # Second expand is needed for batchgenerators crop
                 image_array = np.expand_dims(image_array, axis=0)
             image_paths.append(sample["image_path"])
-            if sample["label_path"] is not None:
-                label_array = np.load(sample["label_path"], mmap_mode="r")
+            if sample["label_paths"] is not None:
+                label_path = random.choice(sample["label_paths"])
+                label_array = np.load(label_path, mmap_mode="r")
                 # Add channel to image dimension
                 label_array = np.expand_dims(label_array, axis=0)
                 if self.training:
                     # Second expand is needed for batchgenerators crop
                     label_array = np.expand_dims(label_array, axis=0)
-                label_paths.append(sample["label_path"])
+                label_paths.append(label_path)
             else:
                 label_array = None
             if self.training:
@@ -527,11 +528,11 @@ def get_train_data_samples(
                 if label_path is not None:
                     label_paths.append(label_path)
 
-            label_path = random.choice(label_paths) if len(label_paths) > 0 else None
+            label_paths = label_paths if len(label_paths) > 0 else None
             samples.append(
                 {
                     "image_path": image_path,
-                    "label_path": label_path,
+                    "label_paths": label_paths,
                 }
             )
 
@@ -590,7 +591,7 @@ def get_val_test_data_samples(
                 if label_path is not None:
                     label_paths.append(label_path)
 
-            label_path = random.choice(label_paths) if len(label_paths) > 0 else None
+            label_paths = label_paths if len(label_paths) > 0 else None
 
             image_array = np.load(image_path, mmap_mode="r")
 
@@ -617,7 +618,7 @@ def get_val_test_data_samples(
                 samples.append(
                     {
                         "image_path": image_path,
-                        "label_path": label_path,
+                        "label_paths": label_paths,
                         "crop_idx": crop_index,
                     }
                 )

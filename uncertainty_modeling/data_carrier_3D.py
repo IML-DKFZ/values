@@ -50,7 +50,7 @@ class DataCarrier3D:
         """
         input = {}
         input["image_paths"] = [sample["image_path"]]
-        input["label_paths"] = [sample["label_path"]]
+        input["label_paths"] = [sample["label_paths"]]
         input["crop_idx"] = [sample["crop_idx"]]
 
         image_array = np.load(sample["image_path"], mmap_mode="r")
@@ -62,14 +62,18 @@ class DataCarrier3D:
         ]
         input["data"] = np.expand_dims(image_patch, 0)
 
-        if sample["label_path"] is not None:
-            label_array = np.load(sample["label_path"], mmap_mode="r")
-            label_patch = label_array[
-                sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
-                sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
-                sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
-            ]
-            input["seg"] = np.expand_dims(label_patch, 0)
+        if sample["label_paths"] is not None:
+            label_patches = []
+            for label_path in sample["label_paths"]:
+                label_array = np.load(label_path, mmap_mode="r")
+                label_patch = label_array[
+                    sample["crop_idx"][0][0] : sample["crop_idx"][0][1],
+                    sample["crop_idx"][1][0] : sample["crop_idx"][1][1],
+                    sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
+                ]
+                label_patches.append(label_patch)
+            label_patches = np.array(label_patches)
+            input["seg"] = np.expand_dims(label_patches, 1)
         return input
 
     def concat_data(self, batch: Dict, softmax_pred: torch.Tensor) -> None:
@@ -84,7 +88,7 @@ class DataCarrier3D:
         for index, image_path in enumerate(batch["image_paths"]):
             if image_path not in self.data:
                 self.data[image_path] = {}
-                self.data[image_path]["label_path"] = batch["label_paths"][index]
+                self.data[image_path]["label_paths"] = batch["label_paths"][index]
                 self.data[image_path]["softmax_pred"] = np.zeros(
                     (2, *batch["org_image_size"][index])
                 )
@@ -94,7 +98,9 @@ class DataCarrier3D:
 
                 self.data[image_path]["data"] = np.zeros(batch["org_image_size"][index])
 
-                self.data[image_path]["seg"] = np.zeros(batch["org_image_size"][index])
+                self.data[image_path]["seg"] = np.zeros(
+                    [len(batch["label_paths"][index]), *batch["org_image_size"][index]]
+                )
 
             crop_idx = batch["crop_idx"][index]
             self.data[image_path]["data"][
@@ -109,7 +115,7 @@ class DataCarrier3D:
                 crop_idx[1][0] : crop_idx[1][1],
                 crop_idx[2][0] : crop_idx[2][1],
             ] += (
-                batch["seg"][index].cpu().detach().numpy().squeeze()
+                batch["seg"][:, index, :, :, :].cpu().detach().numpy().squeeze()
             )
             self.data[image_path]["softmax_pred"][
                 :,
@@ -174,13 +180,17 @@ class DataCarrier3D:
                 header,
             )
 
-            save(
-                gt_seg,
-                os.path.join(
-                    self.save_gt_dir, key.split("/")[-1].split(".")[0] + ".nii.gz"
-                ),
-                header,
-            )
+            for seg_idx in range(gt_seg.shape[0]):
+                save(
+                    gt_seg[seg_idx],
+                    os.path.join(
+                        self.save_gt_dir,
+                        "{}_{}.nii.gz".format(
+                            key.split("/")[-1].split(".")[0], str(seg_idx).zfill(2)
+                        ),
+                    ),
+                    header,
+                )
 
             for class_idx in range(softmax_pred.shape[0]):
                 class_prob = softmax_pred[class_idx, :, :, :]

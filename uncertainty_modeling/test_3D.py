@@ -1,5 +1,6 @@
 import os
 import pickle
+import random
 from typing import Dict, Tuple, List
 
 import hydra
@@ -11,7 +12,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from torchmetrics.functional.classification import dice_score
+from torchmetrics.functional import dice
 
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
@@ -145,9 +146,29 @@ def calculate_test_metrics(
     test_loss = dice_loss(output_softmax, ground_truth) + nll_loss(
         torch.log(output_softmax), ground_truth
     )
-    test_dice = dice_score(output_softmax, ground_truth)
+    test_dice = dice(output_softmax, ground_truth, ignore_index=0)
     metrics_dict = {"loss": test_loss.item(), "dice": test_dice.item()}
     return metrics_dict
+
+
+def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> float:
+    # TODO: also implement for multiple predictions
+    dist_gt_pred = []
+    for seg_idx in range(ground_truth.shape[0]):
+        gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
+        dist = 1 - dice(output_softmax, gt_seg, ignore_index=0)
+        dist_gt_pred.append(dist)
+    dist_gt_gt = []
+    for seg_idx_1 in range(ground_truth.shape[0]):
+        gt_seg_1 = torch.unsqueeze(ground_truth[seg_idx_1], 0).type(torch.LongTensor)
+        for seg_idx_2 in range(ground_truth.shape[0]):
+            gt_seg_2 = torch.unsqueeze(ground_truth[seg_idx_2], 0).type(
+                torch.LongTensor
+            )
+            dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=0)
+            dist_gt_gt.append(dist)
+
+    return 2 * np.mean(dist_gt_pred) - np.mean(dist_gt_gt)
 
 
 def predict_cases(
@@ -186,11 +207,24 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
     for key, value in test_datacarrier.data.items():
         softmax_pred = torch.from_numpy(value["softmax_pred"])
         softmax_pred = torch.unsqueeze(softmax_pred, 0)
+        rater = random.randint(0, value["seg"].shape[0] - 1)
         gt_seg = torch.from_numpy(
-            np.asarray(value["seg"] / np.clip(value["num_predictions"], 1, None)[0])
+            np.asarray(
+                value["seg"][rater] / np.clip(value["num_predictions"], 1, None)[0]
+            )
         )
         gt_seg = torch.unsqueeze(gt_seg, 0).type(torch.LongTensor)
         metrics_dict = calculate_test_metrics(softmax_pred, gt_seg)
+        if value["seg"].shape[0] > 1:
+            gt = np.asarray(
+                value["seg"]
+                / np.stack(
+                    [np.clip(value["num_predictions"], 1, None)[0]]
+                    * value["seg"].shape[0]
+                )
+            )
+            ged = calculate_ged(softmax_pred, torch.from_numpy(gt))
+            metrics_dict["ged"] = ged
         test_datacarrier.data[key]["metrics"] = metrics_dict
 
 
@@ -257,4 +291,5 @@ def run_test(args: Namespace) -> None:
 
 if __name__ == "__main__":
     arguments = test_cli()
+    random.seed(14)
     run_test(arguments)
