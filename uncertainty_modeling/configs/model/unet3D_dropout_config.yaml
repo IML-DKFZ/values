@@ -1,0 +1,7 @@
+_target_: uncertainty_modeling.models.unet3D_module.UNet3D
+num_classes: 2
+in_channels: 1
+initial_filter_size: 8
+kernel_size: 3
+do_instancenorm: True
+do_dropout: True

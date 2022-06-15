@@ -10,6 +10,7 @@ class UNet3D(nn.Module):
         initial_filter_size: int = 8,
         kernel_size: int = 3,
         do_instancenorm: bool = True,
+        do_dropout: bool = False,
     ):
         """Unet (torch.nn.Module) for 3D input segmentation
 
@@ -22,14 +23,24 @@ class UNet3D(nn.Module):
         """
         super().__init__()
 
+        if do_dropout:
+            self.dropout_prob = 0.5
+        else:
+            self.dropout_prob = 0.0
+
         self.contr_1_1 = self.contract(
-            in_channels, initial_filter_size, kernel_size, instancenorm=do_instancenorm
+            in_channels,
+            initial_filter_size,
+            kernel_size,
+            instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
         self.contr_1_2 = self.contract(
             initial_filter_size,
             initial_filter_size,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
         self.pool = nn.MaxPool3d(2, stride=2)
 
@@ -38,12 +49,14 @@ class UNet3D(nn.Module):
             initial_filter_size * 2,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
         self.contr_2_2 = self.contract(
             initial_filter_size * 2,
             initial_filter_size * 2,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
 
         self.contr_3_1 = self.contract(
@@ -51,12 +64,14 @@ class UNet3D(nn.Module):
             initial_filter_size * 2**2,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
         self.contr_3_2 = self.contract(
             initial_filter_size * 2**2,
             initial_filter_size * 2**2,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
 
         self.contr_4_1 = self.contract(
@@ -64,34 +79,75 @@ class UNet3D(nn.Module):
             initial_filter_size * 2**3,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
         self.contr_4_2 = self.contract(
             initial_filter_size * 2**3,
             initial_filter_size * 2**3,
             kernel_size,
             instancenorm=do_instancenorm,
+            dropout_prob=self.dropout_prob,
         )
 
-        self.center = nn.Sequential(
-            nn.Conv3d(
-                initial_filter_size * 2**3, initial_filter_size * 2**4, 3, padding=1
-            ),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(
-                initial_filter_size * 2**4, initial_filter_size * 2**4, 3, padding=1
-            ),
-            nn.ReLU(inplace=True),
-            nn.ConvTranspose3d(
-                initial_filter_size * 2**4, initial_filter_size * 2**3, 2, stride=2
-            ),
-            nn.ReLU(inplace=True),
-        )
+        if do_dropout:
+            self.center = nn.Sequential(
+                nn.Conv3d(
+                    initial_filter_size * 2**3,
+                    initial_filter_size * 2**4,
+                    3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(
+                    initial_filter_size * 2**4,
+                    initial_filter_size * 2**4,
+                    3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(
+                    initial_filter_size * 2**4,
+                    initial_filter_size * 2**3,
+                    2,
+                    stride=2,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p=self.dropout_prob),
+            )
+        else:
+            self.center = nn.Sequential(
+                nn.Conv3d(
+                    initial_filter_size * 2**3,
+                    initial_filter_size * 2**4,
+                    3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.Conv3d(
+                    initial_filter_size * 2**4,
+                    initial_filter_size * 2**4,
+                    3,
+                    padding=1,
+                ),
+                nn.ReLU(inplace=True),
+                nn.ConvTranspose3d(
+                    initial_filter_size * 2**4,
+                    initial_filter_size * 2**3,
+                    2,
+                    stride=2,
+                ),
+                nn.ReLU(inplace=True),
+            )
 
         self.expand_4_1 = self.expand(
-            initial_filter_size * 2**4, initial_filter_size * 2**3
+            initial_filter_size * 2**4,
+            initial_filter_size * 2**3,
+            dropout_prob=self.dropout_prob,
         )
         self.expand_4_2 = self.expand(
-            initial_filter_size * 2**3, initial_filter_size * 2**3
+            initial_filter_size * 2**3,
+            initial_filter_size * 2**3,
+            dropout_prob=self.dropout_prob,
         )
         self.upscale4 = nn.ConvTranspose3d(
             initial_filter_size * 2**3,
@@ -101,25 +157,39 @@ class UNet3D(nn.Module):
         )
 
         self.expand_3_1 = self.expand(
-            initial_filter_size * 2**3, initial_filter_size * 2**2
+            initial_filter_size * 2**3,
+            initial_filter_size * 2**2,
+            dropout_prob=self.dropout_prob,
         )
         self.expand_3_2 = self.expand(
-            initial_filter_size * 2**2, initial_filter_size * 2**2
+            initial_filter_size * 2**2,
+            initial_filter_size * 2**2,
+            dropout_prob=self.dropout_prob,
         )
         self.upscale3 = nn.ConvTranspose3d(
             initial_filter_size * 2**2, initial_filter_size * 2, 2, stride=2
         )
 
         self.expand_2_1 = self.expand(
-            initial_filter_size * 2**2, initial_filter_size * 2
+            initial_filter_size * 2**2,
+            initial_filter_size * 2,
+            dropout_prob=self.dropout_prob,
         )
-        self.expand_2_2 = self.expand(initial_filter_size * 2, initial_filter_size * 2)
+        self.expand_2_2 = self.expand(
+            initial_filter_size * 2,
+            initial_filter_size * 2,
+            dropout_prob=self.dropout_prob,
+        )
         self.upscale2 = nn.ConvTranspose3d(
             initial_filter_size * 2, initial_filter_size, 2, stride=2
         )
 
-        self.expand_1_1 = self.expand(initial_filter_size * 2, initial_filter_size)
-        self.expand_1_2 = self.expand(initial_filter_size, initial_filter_size)
+        self.expand_1_1 = self.expand(
+            initial_filter_size * 2, initial_filter_size, dropout_prob=self.dropout_prob
+        )
+        self.expand_1_2 = self.expand(
+            initial_filter_size, initial_filter_size, dropout_prob=self.dropout_prob
+        )
         # Output layer for segmentation, kernel size for final layer = 1, see paper
         self.final = nn.Conv3d(initial_filter_size, num_classes, kernel_size=1)
 
@@ -136,6 +206,7 @@ class UNet3D(nn.Module):
         out_channels: int,
         kernel_size: int = 3,
         instancenorm: bool = True,
+        dropout_prob: float = 0.0,
     ) -> nn.Sequential:
         """One contraction in U-net. Consists of one convolution and ReLU
 
@@ -153,17 +224,22 @@ class UNet3D(nn.Module):
                 nn.Conv3d(in_channels, out_channels, kernel_size, padding=1),
                 nn.InstanceNorm3d(out_channels),
                 nn.LeakyReLU(inplace=True),
+                nn.Dropout(p=dropout_prob),
             )
         else:
             layer = nn.Sequential(
                 nn.Conv3d(in_channels, out_channels, kernel_size, padding=1),
                 nn.LeakyReLU(inplace=True),
+                nn.Dropout(p=dropout_prob),
             )
         return layer
 
     @staticmethod
     def expand(
-        in_channels: int, out_channels: int, kernel_size: int = 3
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        dropout_prob: float = 0.0,
     ) -> nn.Sequential:
         """One expansion in U-net. Consists of one convolution and ReLU
 
@@ -178,6 +254,7 @@ class UNet3D(nn.Module):
         layer = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size, padding=1),
             nn.LeakyReLU(inplace=True),
+            nn.Dropout(p=dropout_prob),
         )
         return layer
 
