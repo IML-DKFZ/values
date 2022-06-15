@@ -1,1 +1,3 @@
-checkpoint_path: "/media/kahl/Data/Uncertainty/ToyExperiment/Toy-Data-Test/version_25/checkpoints/epoch=1-step=306.ckpt"
+checkpoint_path: "/media/kahl/Data/Uncertainty/ToyExperiment/Softmax-Case-2/12021565/checkpoints/epoch=149-step=19558.ckpt"
+data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
+save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
