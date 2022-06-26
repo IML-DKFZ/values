@@ -70,6 +70,12 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         help="If given, only use these subject of the test folder."
         "Otherwise, all images from the test input directory will be used.",
     )
+    parser.add_argument(
+        "--n_pred",
+        type=int,
+        default=1,
+        help="Number of predictions to make by the model",
+    )
     with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -152,12 +158,28 @@ def calculate_test_metrics(
 
 
 def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> float:
-    # TODO: also implement for multiple predictions
     dist_gt_pred = []
     for seg_idx in range(ground_truth.shape[0]):
         gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
-        dist = 1 - dice(output_softmax, gt_seg, ignore_index=0)
-        dist_gt_pred.append(dist)
+        for pred_idx in range(output_softmax.shape[0]):
+            pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
+                torch.FloatTensor
+            )
+            dist = 1 - dice(pred_softmax, gt_seg, ignore_index=0)
+            dist_gt_pred.append(dist)
+    dist_pred_pred = []
+    for pred_idx_1 in range(output_softmax.shape[0]):
+        pred_softmax_1 = torch.unsqueeze(output_softmax[pred_idx_1], 0).type(
+            torch.FloatTensor
+        )
+        pred_1 = torch.argmax(pred_softmax_1, dim=1).type(torch.LongTensor)
+        for pred_idx_2 in range(output_softmax.shape[0]):
+            pred_softmax_2 = torch.unsqueeze(output_softmax[pred_idx_2], 0).type(
+                torch.FloatTensor
+            )
+            pred_2 = torch.argmax(pred_softmax_2, dim=1).type(torch.LongTensor)
+            dist = 1 - dice(pred_1, pred_2, ignore_index=0)
+            dist_pred_pred.append(dist)
     dist_gt_gt = []
     for seg_idx_1 in range(ground_truth.shape[0]):
         gt_seg_1 = torch.unsqueeze(ground_truth[seg_idx_1], 0).type(torch.LongTensor)
@@ -168,11 +190,14 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> f
             dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=0)
             dist_gt_gt.append(dist)
 
-    return 2 * np.mean(dist_gt_pred) - np.mean(dist_gt_gt)
+    return 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
 
 
 def predict_cases(
-    test_datacarrier: DataCarrier3D, data_samples: List[Dict], model: nn.Module
+    test_datacarrier: DataCarrier3D,
+    data_samples: List[Dict],
+    model: nn.Module,
+    n_pred: int = 1,
 ) -> DataCarrier3D:
     """
     Predict all test cases.
@@ -190,12 +215,58 @@ def predict_cases(
         to_tensor = Compose([NumpyToTensor()])
         input_tensor = to_tensor(**input)
 
-        model = model.double()
-        output = model.forward(input_tensor["data"].double())
-        output_softmax = F.softmax(output, dim=1)
+        for pred_idx in range(n_pred):
+            model = model.double()
+            output = model.forward(input_tensor["data"].double())
+            output_softmax = F.softmax(output, dim=1)
 
-        test_datacarrier.concat_data(batch=input_tensor, softmax_pred=output_softmax)
+            test_datacarrier.concat_data(
+                batch=input_tensor,
+                softmax_pred=output_softmax,
+                n_pred=n_pred,
+                pred_idx=pred_idx,
+            )
     return test_datacarrier
+
+
+def caculcate_uncertainty_dropout(test_datacarrier: DataCarrier3D) -> None:
+    for key, value in test_datacarrier.data.items():
+        softmax_preds = torch.from_numpy(value["softmax_pred"])
+        mean_softmax = torch.mean(softmax_preds, dim=0)
+        pred_entropy = torch.zeros(
+            softmax_preds.shape[2],
+            softmax_preds.shape[3],
+            softmax_preds.shape[4],
+        )
+        for y in range(mean_softmax.shape[0]):
+            pred_entropy += mean_softmax[y] * torch.log(mean_softmax[y])
+        pred_entropy *= -1
+        aleatoric_uncertainty = torch.zeros(
+            softmax_preds.shape[0],
+            softmax_preds.shape[2],
+            softmax_preds.shape[3],
+            softmax_preds.shape[4],
+        )
+        for pred in range(softmax_preds.shape[0]):
+            entropy = torch.zeros(
+                softmax_preds.shape[2],
+                softmax_preds.shape[3],
+                softmax_preds.shape[4],
+            )
+            for y in range(softmax_preds.shape[1]):
+                entropy += softmax_preds[pred, y, :, :, :] * torch.log(
+                    softmax_preds[pred, y, :, :, :]
+                )
+            entropy *= -1
+            aleatoric_uncertainty[pred] = entropy
+        aleatoric_uncertainty = torch.mean(aleatoric_uncertainty, dim=0)
+        epistemic_uncertainty = pred_entropy - aleatoric_uncertainty
+        value["pred_entropy"] = pred_entropy
+        value["aleatoric_uncertainty"] = aleatoric_uncertainty
+        value["epistemic_uncertainty"] = epistemic_uncertainty
+        # TODO: alle predictions für metriken berücksichtigen
+        # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
+    return
 
 
 def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
@@ -205,8 +276,13 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
         test_datacarrier: The datacarrier with the concatenated data
     """
     for key, value in test_datacarrier.data.items():
-        softmax_pred = torch.from_numpy(value["softmax_pred"])
-        softmax_pred = torch.unsqueeze(softmax_pred, 0)
+        mean_softmax_pred = torch.mean(
+            torch.from_numpy(
+                value["softmax_pred"] / np.clip(value["num_predictions"], 1, None)[0]
+            ),
+            dim=0,
+        )
+        mean_softmax_pred = torch.unsqueeze(mean_softmax_pred, 0)
         rater = random.randint(0, value["seg"].shape[0] - 1)
         gt_seg = torch.from_numpy(
             np.asarray(
@@ -214,8 +290,8 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
             )
         )
         gt_seg = torch.unsqueeze(gt_seg, 0).type(torch.LongTensor)
-        metrics_dict = calculate_test_metrics(softmax_pred, gt_seg)
-        if value["seg"].shape[0] > 1:
+        metrics_dict = calculate_test_metrics(mean_softmax_pred, gt_seg)
+        if value["seg"].shape[0] > 1 or value["softmax_pred"].shape[0] > 1:
             gt = np.asarray(
                 value["seg"]
                 / np.stack(
@@ -223,7 +299,14 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                     * value["seg"].shape[0]
                 )
             )
-            ged = calculate_ged(softmax_pred, torch.from_numpy(gt))
+            softmax_pred = np.asarray(
+                value["softmax_pred"]
+                / np.stack(
+                    [np.clip(value["num_predictions"], 1, None)]
+                    * value["softmax_pred"].shape[0]
+                )
+            )
+            ged = calculate_ged(torch.from_numpy(softmax_pred), torch.from_numpy(gt))
             metrics_dict["ged"] = ged
         test_datacarrier.data[key]["metrics"] = metrics_dict
 
@@ -250,7 +333,7 @@ def save_results(
         exp_name=hparams["exp_name"],
         version=hparams["version"],
         org_data_path=os.path.join(
-            data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTr"
+            data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTs"
         ),
     )
     test_datacarrier.log_metrics()
@@ -284,7 +367,12 @@ def run_test(args: Namespace) -> None:
     )
 
     model = load_model_from_checkpoint(checkpoint)
-    test_datacarrier = predict_cases(test_datacarrier, data_samples, model)
+    test_datacarrier = predict_cases(test_datacarrier, data_samples, model, args.n_pred)
+    if (
+        hasattr(hparams["model"], "do_dropout")
+        and hparams["model"]["do_dropout"] == True
+    ):
+        caculcate_uncertainty_dropout(test_datacarrier)
     calculate_metrics(test_datacarrier)
     save_results(test_datacarrier, hparams, args)
 

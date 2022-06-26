@@ -76,7 +76,13 @@ class DataCarrier3D:
             input["seg"] = np.expand_dims(label_patches, 1)
         return input
 
-    def concat_data(self, batch: Dict, softmax_pred: torch.Tensor) -> None:
+    def concat_data(
+        self,
+        batch: Dict,
+        softmax_pred: torch.Tensor,
+        n_pred: int = 1,
+        pred_idx: int = 0,
+    ) -> None:
         """
         Concatenate the data
         Stores the data in self.data which is a dictionary containing the image paths as keys
@@ -90,7 +96,7 @@ class DataCarrier3D:
                 self.data[image_path] = {}
                 self.data[image_path]["label_paths"] = batch["label_paths"][index]
                 self.data[image_path]["softmax_pred"] = np.zeros(
-                    (2, *batch["org_image_size"][index])
+                    (n_pred, 2, *batch["org_image_size"][index])
                 )
                 self.data[image_path]["num_predictions"] = np.zeros(
                     (2, *batch["org_image_size"][index])
@@ -118,6 +124,7 @@ class DataCarrier3D:
                 batch["seg"][:, index, :, :, :].cpu().detach().numpy().squeeze()
             )
             self.data[image_path]["softmax_pred"][
+                pred_idx,
                 :,
                 crop_idx[0][0] : crop_idx[0][1],
                 crop_idx[1][0] : crop_idx[1][1],
@@ -155,12 +162,9 @@ class DataCarrier3D:
             gt_seg = np.asarray(
                 value["seg"] / np.clip(value["num_predictions"], 1, None)[0]
             )
-            mean_softmax = value["softmax_pred"] / np.clip(
+            softmax_pred = value["softmax_pred"] / np.clip(
                 value["num_predictions"], 1, None
             )
-            softmax_pred = np.asarray(mean_softmax)
-            pred_seg = np.argmax(mean_softmax, axis=0)
-            pred_seg = np.asarray(pred_seg)
 
             if org_data_path:
                 _, header = load(
@@ -191,28 +195,83 @@ class DataCarrier3D:
                     ),
                     header,
                 )
-
-            for class_idx in range(softmax_pred.shape[0]):
-                class_prob = softmax_pred[class_idx, :, :, :]
+            for pred_idx in range(softmax_pred.shape[0]):
+                pred_seg = np.argmax(softmax_pred[pred_idx], axis=0)
+                pred_seg = np.asarray(pred_seg)
                 save(
-                    class_prob,
+                    pred_seg.astype(np.uint8),
                     os.path.join(
-                        self.save_pred_prob_dir,
+                        self.save_pred_dir,
                         "{}_{}.nii.gz".format(
-                            key.split("/")[-1].split(".")[0],
-                            str(class_idx + 1).zfill(4),
+                            key.split("/")[-1].split(".")[0], str(pred_idx + 1).zfill(2)
                         ),
                     ),
                     header,
                 )
+                for class_idx in range(softmax_pred.shape[1]):
+                    class_prob = softmax_pred[pred_idx, class_idx, :, :, :]
+                    save(
+                        class_prob,
+                        os.path.join(
+                            self.save_pred_prob_dir,
+                            "{}_{}_{}.nii.gz".format(
+                                key.split("/")[-1].split(".")[0],
+                                str(pred_idx + 1).zfill(2),
+                                str(class_idx + 1).zfill(2),
+                            ),
+                        ),
+                        header,
+                    )
 
-            save(
-                pred_seg.astype(np.uint8),
-                os.path.join(
-                    self.save_pred_dir, key.split("/")[-1].split(".")[0] + ".nii.gz"
-                ),
-                header,
-            )
+            if "pred_entropy" in value:
+                save_pred_entropy_dir = os.path.join(self.save_dir, "pred_entropy")
+                os.makedirs(save_pred_entropy_dir, exist_ok=True)
+                pred_entropy = np.asarray(
+                    value["pred_entropy"]
+                    / np.clip(value["num_predictions"], 1, None)[0]
+                )
+                save(
+                    pred_entropy,
+                    os.path.join(
+                        save_pred_entropy_dir,
+                        key.split("/")[-1].split(".")[0] + ".nii.gz",
+                    ),
+                    header,
+                )
+            if "aleatoric_uncertainty" in value:
+                save_aleatoric_uncertainty_dir = os.path.join(
+                    self.save_dir, "aleatoric_uncertainty"
+                )
+                os.makedirs(save_aleatoric_uncertainty_dir, exist_ok=True)
+                aleatoric_uncertainty = np.asarray(
+                    value["aleatoric_uncertainty"]
+                    / np.clip(value["num_predictions"], 1, None)[0]
+                )
+                save(
+                    aleatoric_uncertainty,
+                    os.path.join(
+                        save_aleatoric_uncertainty_dir,
+                        key.split("/")[-1].split(".")[0] + ".nii.gz",
+                    ),
+                    header,
+                )
+            if "epistemic_uncertainty" in value:
+                save_epistemic_uncertainty_dir = os.path.join(
+                    self.save_dir, "epistemic_uncertainty"
+                )
+                os.makedirs(save_epistemic_uncertainty_dir, exist_ok=True)
+                epistemic_uncertainty = np.asarray(
+                    value["epistemic_uncertainty"]
+                    / np.clip(value["num_predictions"], 1, None)[0]
+                )
+                save(
+                    epistemic_uncertainty,
+                    os.path.join(
+                        save_epistemic_uncertainty_dir,
+                        key.split("/")[-1].split(".")[0] + ".nii.gz",
+                    ),
+                    header,
+                )
 
     def log_metrics(self) -> None:
         """
