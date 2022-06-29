@@ -55,7 +55,7 @@ def main(cfg_hydra: DictConfig):
     )
     dm.prepare_data()
     dm.setup("fit")
-    model = VNetExperiment(config, **vars(config))
+    model = VNetExperiment(config, **config)
     trainer.fit(model, datamodule=dm)
 
 
