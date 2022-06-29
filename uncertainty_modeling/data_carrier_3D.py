@@ -128,6 +128,7 @@ class DataCarrier3D:
                 batch["data"][index].cpu().detach().numpy().squeeze()
             )
             self.data[image_path]["seg"][
+                :,
                 crop_idx[0][0] : crop_idx[0][1],
                 crop_idx[1][0] : crop_idx[1][1],
                 crop_idx[2][0] : crop_idx[2][1],
