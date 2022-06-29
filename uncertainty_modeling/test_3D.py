@@ -129,8 +129,12 @@ def load_model_from_checkpoint(checkpoint: Dict) -> VNet:
     state_dict = OrderedDict()
     for k, v in checkpoint["state_dict"].items():
         state_dict[".".join(k.split(".")[1:])] = v
-
-    model = hydra.utils.instantiate(hparams["model"])
+    if "aleatoric_loss" in hparams:
+        model = hydra.utils.instantiate(
+            hparams["model"], aleatoric_loss=hparams["aleatoric_loss"]
+        )
+    else:
+        model = hydra.utils.instantiate(hparams["model"])
     model.load_state_dict(state_dict=state_dict)
     return model
 
@@ -198,6 +202,7 @@ def predict_cases(
     data_samples: List[Dict],
     model: nn.Module,
     n_pred: int = 1,
+    n_aleatoric_samples: int = 10,
 ) -> DataCarrier3D:
     """
     Predict all test cases.
@@ -217,14 +222,28 @@ def predict_cases(
 
         for pred_idx in range(n_pred):
             model = model.double()
-            output = model.forward(input_tensor["data"].double())
-            output_softmax = F.softmax(output, dim=1)
+            if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
+                mu, s = model.forward(input_tensor["data"].double())
+                sigma = torch.exp(s / 2)
+                all_samples = torch.zeros((n_aleatoric_samples, *mu.size()))
+                for t in range(n_aleatoric_samples):
+                    epsilon = torch.randn(s.size())
+                    output = mu + sigma * epsilon
+                    # TODO: Here also log softmax?
+                    output_softmax_sample = F.softmax(output, dim=1)
+                    all_samples[t] = output_softmax_sample
+                output_softmax = torch.mean(all_samples, dim=0)
+            else:
+                output = model.forward(input_tensor["data"].double())
+                output_softmax = F.softmax(output, dim=1)
+                sigma = None
 
             test_datacarrier.concat_data(
                 batch=input_tensor,
                 softmax_pred=output_softmax,
                 n_pred=n_pred,
                 pred_idx=pred_idx,
+                sigma=sigma,
             )
     return test_datacarrier
 
@@ -367,7 +386,18 @@ def run_test(args: Namespace) -> None:
     )
 
     model = load_model_from_checkpoint(checkpoint)
-    test_datacarrier = predict_cases(test_datacarrier, data_samples, model, args.n_pred)
+    if "n_aleatoric_samples" in hparams:
+        test_datacarrier = predict_cases(
+            test_datacarrier,
+            data_samples,
+            model,
+            args.n_pred,
+            hparams["n_aleatoric_samples"],
+        )
+    else:
+        test_datacarrier = predict_cases(
+            test_datacarrier, data_samples, model, args.n_pred
+        )
     if (
         hasattr(hparams["model"], "do_dropout")
         and hparams["model"]["do_dropout"] == True

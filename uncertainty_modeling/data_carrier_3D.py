@@ -16,7 +16,9 @@ class DataCarrier3D:
         self.save_pred_dir = None
         self.save_pred_prob_dir = None
 
-    def _create_save_dirs(self, root_dir: str, exp_name: str, version: int) -> None:
+    def _create_save_dirs(
+        self, root_dir: str, exp_name: str, version: int, sigma_save_dir: bool
+    ) -> None:
         """
         Create the directories to store the test results in.
         Args:
@@ -29,12 +31,16 @@ class DataCarrier3D:
         self.save_gt_dir = os.path.join(self.save_dir, "gt_seg")
         self.save_pred_dir = os.path.join(self.save_dir, "pred_seg")
         self.save_pred_prob_dir = os.path.join(self.save_dir, "pred_prob")
+        if sigma_save_dir:
+            self.save_pred_sigma_dir = os.path.join(self.save_dir, "sigma")
 
         os.makedirs(self.save_dir, exist_ok=True)
         os.makedirs(self.save_input_dir, exist_ok=True)
         os.makedirs(self.save_gt_dir, exist_ok=True)
         os.makedirs(self.save_pred_dir, exist_ok=True)
         os.makedirs(self.save_pred_prob_dir, exist_ok=True)
+        if sigma_save_dir:
+            os.makedirs(self.save_pred_sigma_dir, exist_ok=True)
 
     @staticmethod
     def load_image(sample) -> Dict:
@@ -82,6 +88,7 @@ class DataCarrier3D:
         softmax_pred: torch.Tensor,
         n_pred: int = 1,
         pred_idx: int = 0,
+        sigma: torch.Tensor = None,
     ) -> None:
         """
         Concatenate the data
@@ -98,6 +105,10 @@ class DataCarrier3D:
                 self.data[image_path]["softmax_pred"] = np.zeros(
                     (n_pred, 2, *batch["org_image_size"][index])
                 )
+                if sigma is not None:
+                    self.data[image_path]["sigma"] = np.zeros(
+                        (n_pred, 2, *batch["org_image_size"][index])
+                    )
                 self.data[image_path]["num_predictions"] = np.zeros(
                     (2, *batch["org_image_size"][index])
                 )
@@ -132,6 +143,16 @@ class DataCarrier3D:
             ] += (
                 softmax_pred[index].cpu().detach().numpy()
             )
+            if sigma is not None:
+                self.data[image_path]["sigma"][
+                    pred_idx,
+                    :,
+                    crop_idx[0][0] : crop_idx[0][1],
+                    crop_idx[1][0] : crop_idx[1][1],
+                    crop_idx[2][0] : crop_idx[2][1],
+                ] += (
+                    sigma[index].cpu().detach().numpy()
+                )
             self.data[image_path]["num_predictions"][
                 :,
                 crop_idx[0][0] : crop_idx[0][1],
@@ -154,7 +175,15 @@ class DataCarrier3D:
             version: version of the experiment
             org_data_path: The path to the original data to infer header information
         """
-        self._create_save_dirs(root_dir=root_dir, exp_name=exp_name, version=version)
+        sigma_save_dir = False
+        if "sigma" in list(self.data.values())[0]:
+            sigma_save_dir = True
+        self._create_save_dirs(
+            root_dir=root_dir,
+            exp_name=exp_name,
+            version=version,
+            sigma_save_dir=sigma_save_dir,
+        )
         for key, value in self.data.items():
             data = np.asarray(
                 value["data"] / np.clip(value["num_predictions"], 1, None)[0]
@@ -165,6 +194,11 @@ class DataCarrier3D:
             softmax_pred = value["softmax_pred"] / np.clip(
                 value["num_predictions"], 1, None
             )
+
+            if "sigma" in value:
+                sigma = np.asarray(
+                    value["sigma"] / np.clip(value["num_predictions"], 1, None)[0]
+                )
 
             if org_data_path:
                 _, header = load(
@@ -222,6 +256,20 @@ class DataCarrier3D:
                         ),
                         header,
                     )
+                    if "sigma" in value:
+                        class_sigma = sigma[pred_idx, class_idx, :, :, :]
+                        save(
+                            class_sigma,
+                            os.path.join(
+                                self.save_pred_sigma_dir,
+                                "{}_{}_{}.nii.gz".format(
+                                    key.split("/")[-1].split(".")[0],
+                                    str(pred_idx + 1).zfill(2),
+                                    str(class_idx + 1).zfill(2),
+                                ),
+                            ),
+                            header,
+                        )
 
             if "pred_entropy" in value:
                 save_pred_entropy_dir = os.path.join(self.save_dir, "pred_entropy")

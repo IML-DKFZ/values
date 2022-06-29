@@ -24,6 +24,8 @@ class VNetExperiment(pl.LightningModule):
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-6,
         nested_hparam_dict: Optional[dict] = None,
+        aleatoric_loss: bool = False,
+        n_aleatoric_samples: int = 10,
         *args,
         **kwargs
     ):
@@ -44,12 +46,17 @@ class VNetExperiment(pl.LightningModule):
         self.save_hyperparameters(OmegaConf.to_container(hparams))
         self.nested_hparam_dict = nested_hparam_dict
 
-        self.model = hydra.utils.instantiate(hparams.model)
+        self.model = hydra.utils.instantiate(
+            hparams.model, aleatoric_loss=aleatoric_loss
+        )
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
 
+        self.aleatoric_loss = aleatoric_loss
+        self.n_aleatoric_samples = n_aleatoric_samples
         self.dice_loss = SoftDiceLoss()
         self.ce_loss = torch.nn.CrossEntropyLoss()
+        self.nll_loss = torch.nn.NLLLoss()
 
         self.val_loss_avg = 0.0
         self.val_avg_acc = 0.0
@@ -132,12 +139,30 @@ class VNetExperiment(pl.LightningModule):
         Returns:
             loss [torch.Tensor]: The computed loss
         """
-        output = self.forward(batch["data"])
-        output_softmax = F.softmax(output, dim=1)
-
         target = batch["seg"].long().squeeze()
-        loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
+        if not self.aleatoric_loss:
+            output = self.forward(batch["data"])
+            output_softmax = F.softmax(output, dim=1)
 
+            loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
+        else:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            mu, s = self.forward(batch["data"])
+            sigma = torch.exp(s / 2)
+            all_samples = torch.zeros(
+                (self.n_aleatoric_samples, *mu.size()), device=device
+            )
+            for t in range(self.n_aleatoric_samples):
+                epsilon = torch.randn(s.size(), device=device)
+                sample = mu + sigma * epsilon
+                log_sample_prob = F.log_softmax(sample)
+                all_samples[t] = log_sample_prob
+            log_sample_avg = torch.logsumexp(all_samples, 0) - torch.log(
+                torch.tensor(self.n_aleatoric_samples)
+            )
+            loss = self.dice_loss(torch.exp(log_sample_avg), target) + self.nll_loss(
+                log_sample_avg, target
+            )
         self.log(
             "training/train_loss",
             loss,
@@ -160,12 +185,36 @@ class VNetExperiment(pl.LightningModule):
         Returns:
             val_loss [torch.Tensor]: The computed loss
         """
-        output = self.forward(batch["data"].float())
-        output_softmax = F.softmax(output, dim=1)
-
         target = batch["seg"].long().squeeze()
         if len(target.size()) == 3:
             target = target.unsqueeze(0)
+        if not self.aleatoric_loss:
+            output = self.forward(batch["data"].float())
+            output_softmax = F.softmax(output, dim=1)
+            val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
+                output, target
+            )
+            val_dice = dice(output_softmax, target, ignore_index=0)
+        else:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            mu, s = self.forward(batch["data"])
+            sigma = torch.exp(s / 2)
+            all_samples = torch.zeros(
+                (self.n_aleatoric_samples, *mu.size()), device=device
+            )
+            for t in range(self.n_aleatoric_samples):
+                epsilon = torch.randn(s.size(), device=device)
+                sample = mu + sigma * epsilon
+                log_sample_prob = F.log_softmax(sample)
+                all_samples[t] = log_sample_prob
+            log_sample_avg = torch.logsumexp(all_samples, 0) - torch.log(
+                torch.tensor(self.n_aleatoric_samples)
+            )
+            val_loss = self.dice_loss(
+                torch.exp(log_sample_avg), target
+            ) + self.nll_loss(log_sample_avg, target)
+            val_dice = dice(torch.exp(log_sample_avg), target, ignore_index=0)
+
         # Visualization of Segmentations
         # TODO: Visualization for 3D?
         # if batch_idx == 1:
@@ -179,9 +228,6 @@ class VNetExperiment(pl.LightningModule):
         #     self.logger.experiment.add_image(
         #         "validation/Val_Target_Segmentations", grid, self.current_epoch
         #     )
-
-        val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
-        val_dice = dice(output_softmax, target, ignore_index=0)
 
         log = {"validation/val_loss": val_loss, "validation/val_dice": val_dice}
         self.log_dict(log, prog_bar=False, on_step=False, on_epoch=True, logger=True)

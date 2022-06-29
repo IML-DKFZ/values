@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 
@@ -11,6 +13,7 @@ class UNet3D(nn.Module):
         kernel_size: int = 3,
         do_instancenorm: bool = True,
         do_dropout: bool = False,
+        aleatoric_loss: bool = False,
     ):
         """Unet (torch.nn.Module) for 3D input segmentation
 
@@ -22,6 +25,8 @@ class UNet3D(nn.Module):
             do_instancenorm (bool, optional): [True: use instancenorm]. Defaults to True.
         """
         super().__init__()
+        self.num_classes = num_classes
+        self.aleatoric_loss = aleatoric_loss
 
         if do_dropout:
             self.dropout_prob = 0.5
@@ -192,6 +197,10 @@ class UNet3D(nn.Module):
         )
         # Output layer for segmentation, kernel size for final layer = 1, see paper
         self.final = nn.Conv3d(initial_filter_size, num_classes, kernel_size=1)
+        if self.aleatoric_loss:
+            self.final_aleatoric = nn.Conv3d(
+                initial_filter_size, num_classes * 2, kernel_size=1
+            )
 
         self.softmax = torch.nn.Softmax()
 
@@ -284,7 +293,9 @@ class UNet3D(nn.Module):
             xyz3 : (xyz3 + target_width),
         ]
 
-    def forward(self, x: torch.Tensor, enable_concat: bool = True) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, enable_concat: bool = True
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through the network
 
         Args:
@@ -347,7 +358,12 @@ class UNet3D(nn.Module):
         expand = self.expand_1_2(self.expand_1_1(concat))
 
         if enable_concat:
-            output = self.final(expand)
+            if not self.aleatoric_loss:
+                output = self.final(expand)
+            else:
+                output = self.final_aleatoric(expand)
+                mu, s = output.split(self.num_classes, 1)
+                return mu, s
         else:
             output = self.output_reconstruction_map(expand)
 
