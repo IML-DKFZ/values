@@ -35,9 +35,13 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
     """
     parser = ArgumentParser()
     parser.add_argument(
-        "--checkpoint_path",
+        "--checkpoint_paths",
         type=str,
-        help="The path to the chckpoint that should be used to load the model.",
+        nargs="+",
+        help="The path to the checkpoint that should be used to load the model. "
+        "Multiple paths can be given for an ensemble prediction. "
+        "In this case, configuration parameters like the patch size should be the same for all models "
+        "and will be inferred from the checkpoint of the first model.",
     )
     parser.add_argument(
         "-i",
@@ -115,28 +119,30 @@ def dir_and_subjects_from_train(
     return test_data_dir, subject_ids
 
 
-# TODO: probably generalize model here?
-def load_model_from_checkpoint(checkpoint: Dict) -> VNet:
+def load_models_from_checkpoint(checkpoints: List[Dict]) -> List[nn.Module]:
     """
     Load the model for the predictions from a checkpoint
     Args:
-        checkpoint: The checkpoint to load the model from
+        checkpoints: The checkpoints to load the model from
 
     Returns:
-        model [VNet]: The model for the predictions
+        model: The model for the predictions
     """
-    hparams = checkpoint["hyper_parameters"]
-    state_dict = OrderedDict()
-    for k, v in checkpoint["state_dict"].items():
-        state_dict[".".join(k.split(".")[1:])] = v
-    if "aleatoric_loss" in hparams:
-        model = hydra.utils.instantiate(
-            hparams["model"], aleatoric_loss=hparams["aleatoric_loss"]
-        )
-    else:
-        model = hydra.utils.instantiate(hparams["model"])
-    model.load_state_dict(state_dict=state_dict)
-    return model
+    all_models = []
+    for checkpoint in checkpoints:
+        hparams = checkpoint["hyper_parameters"]
+        state_dict = OrderedDict()
+        for k, v in checkpoint["state_dict"].items():
+            state_dict[".".join(k.split(".")[1:])] = v
+        if "aleatoric_loss" in hparams:
+            model = hydra.utils.instantiate(
+                hparams["model"], aleatoric_loss=hparams["aleatoric_loss"]
+            )
+        else:
+            model = hydra.utils.instantiate(hparams["model"])
+        model.load_state_dict(state_dict=state_dict)
+        all_models.append(model)
+    return all_models
 
 
 def calculate_test_metrics(
@@ -200,7 +206,7 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> f
 def predict_cases(
     test_datacarrier: DataCarrier3D,
     data_samples: List[Dict],
-    model: nn.Module,
+    models: List[nn.Module],
     n_pred: int = 1,
     n_aleatoric_samples: int = 10,
 ) -> DataCarrier3D:
@@ -220,35 +226,37 @@ def predict_cases(
         to_tensor = Compose([NumpyToTensor()])
         input_tensor = to_tensor(**input)
 
-        for pred_idx in range(n_pred):
-            model = model.double()
-            if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                mu, s = model.forward(input_tensor["data"].double())
-                sigma = torch.exp(s / 2)
-                all_samples = torch.zeros((n_aleatoric_samples, *mu.size()))
-                for t in range(n_aleatoric_samples):
-                    epsilon = torch.randn(s.size())
-                    output = mu + sigma * epsilon
-                    # TODO: Here also log softmax?
-                    output_softmax_sample = F.softmax(output, dim=1)
-                    all_samples[t] = output_softmax_sample
-                output_softmax = torch.mean(all_samples, dim=0)
-            else:
-                output = model.forward(input_tensor["data"].double())
-                output_softmax = F.softmax(output, dim=1)
-                sigma = None
+        pred_idx = 0
+        for model in models:
+            for pred in range(n_pred):
+                model = model.double()
+                if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
+                    mu, s = model.forward(input_tensor["data"].double())
+                    sigma = torch.exp(s / 2)
+                    all_samples = torch.zeros((n_aleatoric_samples, *mu.size()))
+                    for t in range(n_aleatoric_samples):
+                        epsilon = torch.randn(s.size())
+                        output = mu + sigma * epsilon
+                        output_softmax_sample = F.softmax(output, dim=1)
+                        all_samples[t] = output_softmax_sample
+                    output_softmax = torch.mean(all_samples, dim=0)
+                else:
+                    output = model.forward(input_tensor["data"].double())
+                    output_softmax = F.softmax(output, dim=1)
+                    sigma = None
 
-            test_datacarrier.concat_data(
-                batch=input_tensor,
-                softmax_pred=output_softmax,
-                n_pred=n_pred,
-                pred_idx=pred_idx,
-                sigma=sigma,
-            )
+                test_datacarrier.concat_data(
+                    batch=input_tensor,
+                    softmax_pred=output_softmax,
+                    n_pred=n_pred * len(models),
+                    pred_idx=pred_idx,
+                    sigma=sigma,
+                )
+                pred_idx += 1
     return test_datacarrier
 
 
-def caculcate_uncertainty_dropout(test_datacarrier: DataCarrier3D) -> None:
+def caculcate_uncertainty_multiple_pred(test_datacarrier: DataCarrier3D) -> None:
     for key, value in test_datacarrier.data.items():
         softmax_preds = torch.from_numpy(value["softmax_pred"])
         mean_softmax = torch.mean(softmax_preds, dim=0)
@@ -283,7 +291,6 @@ def caculcate_uncertainty_dropout(test_datacarrier: DataCarrier3D) -> None:
         value["pred_entropy"] = pred_entropy
         value["aleatoric_uncertainty"] = aleatoric_uncertainty
         value["epistemic_uncertainty"] = epistemic_uncertainty
-        # TODO: alle predictions für metriken berücksichtigen
         # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
     return
 
@@ -368,8 +375,11 @@ def run_test(args: Namespace) -> None:
     test_data_dir = args.test_data_dir
     subject_ids = args.subject_ids
 
-    checkpoint = torch.load(args.checkpoint_path)
-    hparams = checkpoint["hyper_parameters"]
+    all_checkpoints = []
+    for checkpoint_path in args.checkpoint_paths:
+        checkpoint = torch.load(checkpoint_path)
+        all_checkpoints.append(checkpoint)
+    hparams = all_checkpoints[0]["hyper_parameters"]
 
     # No test data dir specified, so data should be in same input dir as training data and split should be specified
     if test_data_dir is None:
@@ -385,24 +395,21 @@ def run_test(args: Namespace) -> None:
         patch_overlap=hparams["datamodule"]["patch_overlap"],
     )
 
-    model = load_model_from_checkpoint(checkpoint)
+    models = load_models_from_checkpoint(all_checkpoints)
     if "n_aleatoric_samples" in hparams:
         test_datacarrier = predict_cases(
             test_datacarrier,
             data_samples,
-            model,
+            models,
             args.n_pred,
             hparams["n_aleatoric_samples"],
         )
     else:
         test_datacarrier = predict_cases(
-            test_datacarrier, data_samples, model, args.n_pred
+            test_datacarrier, data_samples, models, args.n_pred
         )
-    if (
-        hasattr(hparams["model"], "do_dropout")
-        and hparams["model"]["do_dropout"] == True
-    ):
-        caculcate_uncertainty_dropout(test_datacarrier)
+    if args.n_pred > 1 or len(models) > 1:
+        caculcate_uncertainty_multiple_pred(test_datacarrier)
     calculate_metrics(test_datacarrier)
     save_results(test_datacarrier, hparams, args)
 

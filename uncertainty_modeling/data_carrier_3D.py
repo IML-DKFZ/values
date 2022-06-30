@@ -120,21 +120,22 @@ class DataCarrier3D:
                 )
 
             crop_idx = batch["crop_idx"][index]
-            self.data[image_path]["data"][
-                crop_idx[0][0] : crop_idx[0][1],
-                crop_idx[1][0] : crop_idx[1][1],
-                crop_idx[2][0] : crop_idx[2][1],
-            ] += (
-                batch["data"][index].cpu().detach().numpy().squeeze()
-            )
-            self.data[image_path]["seg"][
-                :,
-                crop_idx[0][0] : crop_idx[0][1],
-                crop_idx[1][0] : crop_idx[1][1],
-                crop_idx[2][0] : crop_idx[2][1],
-            ] += (
-                batch["seg"][:, index, :, :, :].cpu().detach().numpy().squeeze()
-            )
+            if pred_idx == 0:
+                self.data[image_path]["data"][
+                    crop_idx[0][0] : crop_idx[0][1],
+                    crop_idx[1][0] : crop_idx[1][1],
+                    crop_idx[2][0] : crop_idx[2][1],
+                ] += (
+                    batch["data"][index].cpu().detach().numpy().squeeze()
+                )
+                self.data[image_path]["seg"][
+                    :,
+                    crop_idx[0][0] : crop_idx[0][1],
+                    crop_idx[1][0] : crop_idx[1][1],
+                    crop_idx[2][0] : crop_idx[2][1],
+                ] += (
+                    batch["seg"][:, index, :, :, :].cpu().detach().numpy().squeeze()
+                )
             self.data[image_path]["softmax_pred"][
                 pred_idx,
                 :,
@@ -154,12 +155,13 @@ class DataCarrier3D:
                 ] += (
                     sigma[index].cpu().detach().numpy()
                 )
-            self.data[image_path]["num_predictions"][
-                :,
-                crop_idx[0][0] : crop_idx[0][1],
-                crop_idx[1][0] : crop_idx[1][1],
-                crop_idx[2][0] : crop_idx[2][1],
-            ] += 1
+            if pred_idx == 0:
+                self.data[image_path]["num_predictions"][
+                    :,
+                    crop_idx[0][0] : crop_idx[0][1],
+                    crop_idx[1][0] : crop_idx[1][1],
+                    crop_idx[2][0] : crop_idx[2][1],
+                ] += 1
 
     def save_data(
         self,
