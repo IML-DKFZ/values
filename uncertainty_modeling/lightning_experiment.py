@@ -17,7 +17,7 @@ from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
 
 
-class VNetExperiment(pl.LightningModule):
+class LightningExperiment(pl.LightningModule):
     def __init__(
         self,
         hparams: DictConfig,
@@ -38,7 +38,7 @@ class VNetExperiment(pl.LightningModule):
             weight_decay (float, optional): [weight decay on model]. Defaults to 1e-6.
             nested_hparam_dict (Optional[dict], optional): if dict -> saved in the experiment_directory. Defaults to None.
         """
-        super(VNetExperiment, self).__init__()
+        super(LightningExperiment, self).__init__()
         if isinstance(hparams, dict):
             hparams = Namespace(**hparams)
         if "DATASET_LOCATION" in os.environ.keys():

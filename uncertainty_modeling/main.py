@@ -6,7 +6,7 @@ from argparse import Namespace, ArgumentParser
 
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf, open_dict
-from uncertainty_modeling.vnet_lightning import VNetExperiment
+from uncertainty_modeling.lightning_experiment import LightningExperiment
 
 
 def pl_cli():
@@ -55,7 +55,7 @@ def main(cfg_hydra: DictConfig):
     )
     dm.prepare_data()
     dm.setup("fit")
-    model = VNetExperiment(config, **config)
+    model = LightningExperiment(config, **config)
     trainer.fit(model, datamodule=dm)
 
 
