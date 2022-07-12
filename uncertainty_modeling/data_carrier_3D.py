@@ -232,6 +232,34 @@ class DataCarrier3D:
                     ),
                     header,
                 )
+            if softmax_pred.shape[0] > 1:
+                mean_softmax_pred = np.mean(softmax_pred, axis=0)
+                mean_seg = np.argmax(mean_softmax_pred, axis=0)
+                mean_seg = np.asarray(mean_seg)
+
+                save(
+                    mean_seg.astype(np.uint8),
+                    os.path.join(
+                        self.save_pred_dir,
+                        "{}_{}.nii.gz".format(key.split("/")[-1].split(".")[0], "mean"),
+                    ),
+                    header,
+                )
+                for class_idx in range(mean_softmax_pred.shape[0]):
+                    class_prob = mean_softmax_pred[class_idx, :, :, :]
+                    save(
+                        class_prob,
+                        os.path.join(
+                            self.save_pred_prob_dir,
+                            "{}_{}_{}.nii.gz".format(
+                                key.split("/")[-1].split(".")[0],
+                                "mean",
+                                str(class_idx + 1).zfill(2),
+                            ),
+                        ),
+                        header,
+                    )
+
             for pred_idx in range(softmax_pred.shape[0]):
                 pred_seg = np.argmax(softmax_pred[pred_idx], axis=0)
                 pred_seg = np.asarray(pred_seg)
