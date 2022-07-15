@@ -237,6 +237,7 @@ class ToyDataModule3D(pl.LightningDataModule):
             file_pattern="*.npy",
             subject_ids=self.tr_keys,
             num_raters=self.num_raters,
+            patch_size=self.patch_size,
         )
         train_augmenter = FixedLengthAugmenter(
             data_loader=train_loader,
@@ -265,6 +266,7 @@ class ToyDataModule3D(pl.LightningDataModule):
             subject_ids=self.val_keys,
             num_raters=self.num_raters,
             training=False,
+            patch_size=self.patch_size,
         )
         val_augmenter = FixedLengthAugmenter(
             data_loader=val_loader,

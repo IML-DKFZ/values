@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
+import torch.distributions as td
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf
 from torchmetrics.functional.classification import dice
@@ -46,9 +47,12 @@ class LightningExperiment(pl.LightningModule):
         self.save_hyperparameters(OmegaConf.to_container(hparams))
         self.nested_hparam_dict = nested_hparam_dict
 
-        self.model = hydra.utils.instantiate(
-            hparams.model, aleatoric_loss=aleatoric_loss
-        )
+        if aleatoric_loss is not None:
+            self.model = hydra.utils.instantiate(
+                hparams.model, aleatoric_loss=aleatoric_loss
+            )
+        else:
+            self.model = hydra.utils.instantiate(hparams.model)
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
 
@@ -118,7 +122,7 @@ class LightningExperiment(pl.LightningModule):
                 Namespace(**self.hparams), metrics=metric_placeholder
             )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor | td.LowRankMultivariateNormal:
         """Forward pass through the network
 
         Args:
@@ -140,12 +144,25 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze()
-        if not self.aleatoric_loss:
-            output = self.forward(batch["data"])
-            output_softmax = F.softmax(output, dim=1)
-
-            loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
-        else:
+        if self.aleatoric_loss is None:
+            distribution = self.forward(batch["data"])
+            samples = distribution.rsample([self.n_aleatoric_samples])
+            samples = samples.view(
+                [
+                    self.n_aleatoric_samples,
+                    batch["data"].size()[0],
+                    self.model.num_classes,
+                    *batch["data"].size()[-3:],
+                ]
+            )
+            loss = torch.zeros([self.n_aleatoric_samples])
+            for idx, sample in enumerate(samples):
+                # loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
+                #     sample, target
+                # )
+                loss[idx] = self.ce_loss(sample, target)
+            loss = torch.mean(loss)
+        elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
             sigma = torch.exp(s / 2)
@@ -163,6 +180,11 @@ class LightningExperiment(pl.LightningModule):
             loss = self.dice_loss(torch.exp(log_sample_avg), target) + self.nll_loss(
                 log_sample_avg, target
             )
+        else:
+            output = self.forward(batch["data"])
+            output_softmax = F.softmax(output, dim=1)
+
+            loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
         self.log(
             "training/train_loss",
             loss,
@@ -188,14 +210,29 @@ class LightningExperiment(pl.LightningModule):
         target = batch["seg"].long().squeeze()
         if len(target.size()) == 3:
             target = target.unsqueeze(0)
-        if not self.aleatoric_loss:
-            output = self.forward(batch["data"].float())
-            output_softmax = F.softmax(output, dim=1)
-            val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
-                output, target
+
+        if self.aleatoric_loss is None:
+            distribution = self.forward(batch["data"])
+            samples = distribution.rsample([self.n_aleatoric_samples])
+            samples = samples.view(
+                [
+                    self.n_aleatoric_samples,
+                    batch["data"].size()[0],
+                    self.model.num_classes,
+                    *batch["data"].size()[-3:],
+                ]
             )
-            val_dice = dice(output_softmax, target, ignore_index=0)
-        else:
+            val_loss = torch.zeros([self.n_aleatoric_samples])
+            val_dice = torch.zeros([self.n_aleatoric_samples])
+            for idx, sample in enumerate(samples):
+                # val_loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
+                #     sample, target
+                # )
+                val_loss[idx] = self.ce_loss(sample, target)
+                val_dice[idx] = dice(sample, target, ignore_index=0)
+            val_loss = torch.mean(val_loss)
+            val_dice = torch.mean(val_dice)
+        elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
             sigma = torch.exp(s / 2)
@@ -214,6 +251,13 @@ class LightningExperiment(pl.LightningModule):
                 torch.exp(log_sample_avg), target
             ) + self.nll_loss(log_sample_avg, target)
             val_dice = dice(torch.exp(log_sample_avg), target, ignore_index=0)
+        else:
+            output = self.forward(batch["data"].float())
+            output_softmax = F.softmax(output, dim=1)
+            val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
+                output, target
+            )
+            val_dice = dice(output_softmax, target, ignore_index=0)
 
         # Visualization of Segmentations
         # TODO: Visualization for 3D?

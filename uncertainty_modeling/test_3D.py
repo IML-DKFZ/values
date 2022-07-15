@@ -19,7 +19,7 @@ from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
 from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
-from uncertainty_modeling.models.vnet_module import VNet
+from uncertainty_modeling.models.ssn_unet3D_module import SsnUNet3D
 from loss_modules import SoftDiceLoss
 from tqdm import tqdm
 
@@ -134,7 +134,7 @@ def load_models_from_checkpoint(checkpoints: List[Dict]) -> List[nn.Module]:
         state_dict = OrderedDict()
         for k, v in checkpoint["state_dict"].items():
             state_dict[".".join(k.split(".")[1:])] = v
-        if "aleatoric_loss" in hparams:
+        if "aleatoric_loss" in hparams and hparams["aleatoric_loss"] is not None:
             model = hydra.utils.instantiate(
                 hparams["model"], aleatoric_loss=hparams["aleatoric_loss"]
             )
@@ -201,6 +201,44 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> f
             dist_gt_gt.append(dist)
 
     return 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
+
+
+def predict_cases_ssn(
+    test_datacarrier: DataCarrier3D,
+    data_samples: List[Dict],
+    model: nn.Module,
+    n_pred: int = 1,
+) -> DataCarrier3D:
+    model = model.double()
+    for sample in tqdm(data_samples):
+        input = test_datacarrier.load_image(sample)
+        input["data"] = np.expand_dims(input["data"], axis=0)
+        to_tensor = Compose([NumpyToTensor()])
+        input_tensor = to_tensor(**input)
+        distribution = model.forward(input_tensor["data"])
+        output_samples = distribution.rsample([n_pred])
+        output_samples = output_samples.view(
+            [
+                n_pred,
+                1,
+                model.num_classes,
+                *input_tensor["data"].size()[-3:],
+            ]
+        )
+
+        pred_idx = 0
+        for output_sample in output_samples:
+            output_softmax = F.softmax(output_sample, dim=1)
+
+            test_datacarrier.concat_data(
+                batch=input_tensor,
+                softmax_pred=output_softmax,
+                n_pred=n_pred,
+                pred_idx=0,
+                sigma=None,
+            )
+            pred_idx += 1
+    return test_datacarrier
 
 
 def predict_cases(
@@ -396,7 +434,12 @@ def run_test(args: Namespace) -> None:
     )
 
     models = load_models_from_checkpoint(all_checkpoints)
-    if "n_aleatoric_samples" in hparams:
+    # data_samples = [data_samples[0]]
+    if isinstance(models[0], SsnUNet3D) and len(models) == 1:
+        test_datacarrier = predict_cases_ssn(
+            test_datacarrier, data_samples, models[0], args.n_pred
+        )
+    elif "n_aleatoric_samples" in hparams:
         test_datacarrier = predict_cases(
             test_datacarrier,
             data_samples,
