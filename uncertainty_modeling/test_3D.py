@@ -216,7 +216,7 @@ def predict_cases_ssn(
         to_tensor = Compose([NumpyToTensor()])
         input_tensor = to_tensor(**input)
         distribution = model.forward(input_tensor["data"])
-        output_samples = distribution.rsample([n_pred])
+        output_samples = distribution.sample([n_pred])
         output_samples = output_samples.view(
             [
                 n_pred,
@@ -234,7 +234,7 @@ def predict_cases_ssn(
                 batch=input_tensor,
                 softmax_pred=output_softmax,
                 n_pred=n_pred,
-                pred_idx=0,
+                pred_idx=pred_idx,
                 sigma=None,
             )
             pred_idx += 1
