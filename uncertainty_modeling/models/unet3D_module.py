@@ -294,7 +294,7 @@ class UNet3D(nn.Module):
         ]
 
     def forward(
-        self, x: torch.Tensor, enable_concat: bool = True
+        self, x: torch.Tensor, enable_concat: bool = True, last_layer: bool = True
     ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through the network
 
@@ -356,6 +356,9 @@ class UNet3D(nn.Module):
         concat = torch.cat([upscale, crop * concat_weight], 1)
 
         expand = self.expand_1_2(self.expand_1_1(concat))
+
+        if not last_layer:
+            return expand
 
         if enable_concat:
             if not self.aleatoric_loss:
