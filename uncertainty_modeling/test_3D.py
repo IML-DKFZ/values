@@ -266,18 +266,16 @@ def predict_cases(
 
         pred_idx = 0
         for model in models:
+            model = model.double()
+            if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
+                n_pred = n_aleatoric_samples
+                mu, s = model.forward(input_tensor["data"].double())
+                sigma = torch.exp(s / 2)
             for pred in range(n_pred):
-                model = model.double()
                 if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                    mu, s = model.forward(input_tensor["data"].double())
-                    sigma = torch.exp(s / 2)
-                    all_samples = torch.zeros((n_aleatoric_samples, *mu.size()))
-                    for t in range(n_aleatoric_samples):
-                        epsilon = torch.randn(s.size())
-                        output = mu + sigma * epsilon
-                        output_softmax_sample = F.softmax(output, dim=1)
-                        all_samples[t] = output_softmax_sample
-                    output_softmax = torch.mean(all_samples, dim=0)
+                    epsilon = torch.randn(s.size())
+                    output = mu + sigma * epsilon
+                    output_softmax = F.softmax(output, dim=1)
                 else:
                     output = model.forward(input_tensor["data"].double())
                     output_softmax = F.softmax(output, dim=1)
