@@ -288,19 +288,19 @@ class DataCarrier3D:
                         header,
                     )
                     if "sigma" in value:
-                        class_sigma = sigma[pred_idx, class_idx, :, :, :]
-                        save(
-                            class_sigma,
-                            os.path.join(
-                                self.save_pred_sigma_dir,
-                                "{}_{}_{}.nii.gz".format(
-                                    key.split("/")[-1].split(".")[0],
-                                    str(pred_idx + 1).zfill(2),
-                                    str(class_idx + 1).zfill(2),
+                        if pred_idx == 0:
+                            class_sigma = sigma[pred_idx, class_idx, :, :, :]
+                            save(
+                                class_sigma,
+                                os.path.join(
+                                    self.save_pred_sigma_dir,
+                                    "{}_{}.nii.gz".format(
+                                        key.split("/")[-1].split(".")[0],
+                                        str(class_idx + 1).zfill(2),
+                                    ),
                                 ),
-                            ),
-                            header,
-                        )
+                                header,
+                            )
 
             if "pred_entropy" in value:
                 save_pred_entropy_dir = os.path.join(self.save_dir, "pred_entropy")
