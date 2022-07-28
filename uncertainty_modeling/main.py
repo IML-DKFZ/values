@@ -34,7 +34,7 @@ def main(cfg_hydra: DictConfig):
         config.data_input_dir = os.environ["DATASET_LOCATION"]
     if "EXPERIMENT_LOCATION" in os.environ.keys():
         config.save_dir = os.environ["EXPERIMENT_LOCATION"]
-    if "LSB_JOBID" in os.environ.keys():
+    if "LSB_JOBID" in os.environ.keys() and config.version is None:
         config.version = os.environ["LSB_JOBID"]
 
     if config.seed is not None:
