@@ -1,7 +1,7 @@
 defaults:
-  - datamodule: case2_config
-  - model: vnet_config
-exp_name: "Softmax-Case-2"
+  - datamodule: case1_config
+  - model: unet3D_config
+exp_name: "Softmax-Case-1"
 version: null
 data_input_dir: "/dkfz/cluster/gpu/data/OE0612/kahl/toy-data"
 save_dir: "/dkfz/cluster/gpu/checkpoints/OE0612/kahl/toy-experiments"
