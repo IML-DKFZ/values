@@ -14,6 +14,7 @@ import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf
 from torchmetrics.functional.classification import dice
 
+import uncertainty_modeling.models.ssn_unet3D_module
 from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
 
@@ -27,6 +28,7 @@ class LightningExperiment(pl.LightningModule):
         nested_hparam_dict: Optional[dict] = None,
         aleatoric_loss: bool = False,
         n_aleatoric_samples: int = 10,
+        pretrain_epochs: int = 20,
         *args,
         **kwargs
     ):
@@ -55,6 +57,7 @@ class LightningExperiment(pl.LightningModule):
             self.model = hydra.utils.instantiate(hparams.model)
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
+        self.pretrain_epochs = pretrain_epochs
 
         self.aleatoric_loss = aleatoric_loss
         self.n_aleatoric_samples = n_aleatoric_samples
@@ -74,7 +77,9 @@ class LightningExperiment(pl.LightningModule):
             scheduler [dict]: The learning rate scheduler
         """
         optimizer = optim.Adam(
-            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+            self.parameters(),
+            lr=self.learning_rate,
+            weight_decay=self.weight_decay,
         )
         # scheduler dictionary which defines scheduler and how it is used in the training loop
         scheduler = {
@@ -122,7 +127,9 @@ class LightningExperiment(pl.LightningModule):
                 Namespace(**self.hparams), metrics=metric_placeholder
             )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor | td.LowRankMultivariateNormal:
+    def forward(
+        self, x: torch.Tensor, **kwargs
+    ) -> torch.Tensor | td.LowRankMultivariateNormal:
         """Forward pass through the network
 
         Args:
@@ -131,7 +138,7 @@ class LightningExperiment(pl.LightningModule):
         Returns:
             [torch.Tensor]: The result of the V-Net
         """
-        return self.model(x)
+        return self.model(x, **kwargs)
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Perform a training step, i.e. pass a batch to the network and calculate the loss.
@@ -144,9 +151,14 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze()
-        if self.aleatoric_loss is None:
-            distribution = self.forward(batch["data"])
-            samples = distribution.rsample([self.n_aleatoric_samples])
+        if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
+            if self.current_epoch < self.pretrain_epochs:
+                mean = self.forward(batch["data"], mean_only=True)
+                samples = torch.stack([mean] * 10)
+                # samples = mean.rsample([self.n_aleatoric_samples])
+            else:
+                distribution = self.forward(batch["data"])
+                samples = distribution.rsample([self.n_aleatoric_samples])
             samples = samples.view(
                 [
                     self.n_aleatoric_samples,
@@ -156,12 +168,25 @@ class LightningExperiment(pl.LightningModule):
                 ]
             )
             loss = torch.zeros([self.n_aleatoric_samples])
-            for idx, sample in enumerate(samples):
-                # loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
-                #     sample, target
-                # )
-                loss[idx] = self.ce_loss(sample, target)
-            loss = torch.mean(loss)
+            # for idx, sample in enumerate(samples):
+            # loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
+            #     sample, target
+            # )
+            # loss[idx] = self.ce_loss(sample, target)
+            target = target.unsqueeze(1)
+            target = target.expand((self.n_aleatoric_samples,) + target.shape)
+            target = torch.moveaxis(target, 0, 2)
+            target = torch.squeeze(target)
+            samples = torch.moveaxis(samples, 0, 2)
+            log_prob = -F.cross_entropy(samples, target, reduction="none").view(
+                (self.n_aleatoric_samples, batch["data"].size()[0], -1)
+            )
+            loglikelihood = torch.mean(
+                torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
+                - math.log(self.n_aleatoric_samples)
+            )
+            loss = -loglikelihood
+            # loss = torch.mean(loss)
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
@@ -212,8 +237,13 @@ class LightningExperiment(pl.LightningModule):
             target = target.unsqueeze(0)
 
         if self.aleatoric_loss is None:
-            distribution = self.forward(batch["data"])
-            samples = distribution.rsample([self.n_aleatoric_samples])
+            if self.current_epoch < self.pretrain_epochs:
+                mean = self.forward(batch["data"], mean_only=True)
+                samples = torch.stack([mean] * 10)
+                # samples = mean.rsample([self.n_aleatoric_samples])
+            else:
+                distribution = self.forward(batch["data"])
+                samples = distribution.rsample([self.n_aleatoric_samples])
             samples = samples.view(
                 [
                     self.n_aleatoric_samples,
