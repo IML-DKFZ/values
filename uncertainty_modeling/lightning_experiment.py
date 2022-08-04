@@ -232,7 +232,6 @@ class LightningExperiment(pl.LightningModule):
         if self.aleatoric_loss is None:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
-                # samples = torch.stack([mean] * 10)
                 samples = mean.rsample([self.n_aleatoric_samples])
             else:
                 distribution = self.forward(batch["data"])
@@ -245,16 +244,24 @@ class LightningExperiment(pl.LightningModule):
                     *batch["data"].size()[-3:],
                 ]
             )
-            val_loss = torch.zeros([self.n_aleatoric_samples])
             val_dice = torch.zeros([self.n_aleatoric_samples])
             for idx, sample in enumerate(samples):
-                # val_loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
-                #     sample, target
-                # )
-                val_loss[idx] = self.ce_loss(sample, target)
                 val_dice[idx] = dice(sample, target, ignore_index=0)
-            val_loss = torch.mean(val_loss)
             val_dice = torch.mean(val_dice)
+
+            target = target.unsqueeze(1)
+            target = target.expand((self.n_aleatoric_samples,) + target.shape)
+            flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
+            samples = samples.view(flat_size, self.model.num_classes, -1)
+            target = target.reshape(flat_size, -1)
+            log_prob = -F.cross_entropy(samples, target, reduction="none").view(
+                (self.n_aleatoric_samples, batch["data"].size()[0], -1)
+            )
+            loglikelihood = torch.mean(
+                torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
+                - math.log(self.n_aleatoric_samples)
+            )
+            val_loss = -loglikelihood
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
