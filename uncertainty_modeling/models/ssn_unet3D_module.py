@@ -55,12 +55,13 @@ class SsnUNet3D(UNet3D):
         cov_diag = self.log_cov_diag_conv(logits).exp() + self.epsilon
         cov_diag = cov_diag.view((batch_size, -1))
         # cov_factor = logits[:, 2 * self.num_classes :]
-        # if mean_only:
-        #     cov_factor = torch.zeros([*cov_diag.shape, self.rank])
-        cov_factor = self.cov_factor_conv(logits)
-        cov_factor = cov_factor.view((batch_size, self.rank, self.num_classes, -1))
-        cov_factor = cov_factor.flatten(2, 3)
-        cov_factor = cov_factor.transpose(1, 2)
+        if mean_only:
+            cov_factor = torch.zeros([*cov_diag.shape, self.rank])
+        else:
+            cov_factor = self.cov_factor_conv(logits)
+            cov_factor = cov_factor.view((batch_size, self.rank, self.num_classes, -1))
+            cov_factor = cov_factor.flatten(2, 3)
+            cov_factor = cov_factor.transpose(1, 2)
         # cov_factor = torch.zeros_like(cov_factor)
 
         # x_flat = torch.flatten(x, 1)

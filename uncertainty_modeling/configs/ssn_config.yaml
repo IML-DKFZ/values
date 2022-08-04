@@ -2,11 +2,12 @@ defaults:
   - datamodule: case1_config
   - model: ssn_unet3D_config
 exp_name: "SSN-Case-1"
-version: "tanh_lowScale_mask_ceLoss"
-data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
-save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
+version: "pretrain_mean_debug"
+data_input_dir: "/dkfz/cluster/gpu/data/OE0612/kahl/toy-data"
+save_dir: "/dkfz/cluster/gpu/checkpoints/OE0612/kahl/toy-experiments"
 seed: 123
-max_epochs: 5
+max_epochs: 10
+pretrain_epochs: 5
 batch_size: 8
 learning_rate: 3.0e-4
 weight_decay: 10.0e-6

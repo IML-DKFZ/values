@@ -1,3 +1,4 @@
+import math
 import os
 from typing import Optional, Tuple, List
 from argparse import Namespace, ArgumentParser
@@ -154,8 +155,8 @@ class LightningExperiment(pl.LightningModule):
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
-                samples = torch.stack([mean] * 10)
-                # samples = mean.rsample([self.n_aleatoric_samples])
+                # samples = torch.stack([mean] * 10)
+                samples = mean.rsample([self.n_aleatoric_samples])
             else:
                 distribution = self.forward(batch["data"])
                 samples = distribution.rsample([self.n_aleatoric_samples])
@@ -175,9 +176,9 @@ class LightningExperiment(pl.LightningModule):
             # loss[idx] = self.ce_loss(sample, target)
             target = target.unsqueeze(1)
             target = target.expand((self.n_aleatoric_samples,) + target.shape)
-            target = torch.moveaxis(target, 0, 2)
-            target = torch.squeeze(target)
-            samples = torch.moveaxis(samples, 0, 2)
+            flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
+            samples = samples.view(flat_size, self.model.num_classes, -1)
+            target = target.reshape(flat_size, -1)
             log_prob = -F.cross_entropy(samples, target, reduction="none").view(
                 (self.n_aleatoric_samples, batch["data"].size()[0], -1)
             )
@@ -239,8 +240,8 @@ class LightningExperiment(pl.LightningModule):
         if self.aleatoric_loss is None:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
-                samples = torch.stack([mean] * 10)
-                # samples = mean.rsample([self.n_aleatoric_samples])
+                # samples = torch.stack([mean] * 10)
+                samples = mean.rsample([self.n_aleatoric_samples])
             else:
                 distribution = self.forward(batch["data"])
                 samples = distribution.rsample([self.n_aleatoric_samples])
