@@ -155,7 +155,6 @@ class LightningExperiment(pl.LightningModule):
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
-                # samples = torch.stack([mean] * 10)
                 samples = mean.rsample([self.n_aleatoric_samples])
             else:
                 distribution = self.forward(batch["data"])
@@ -168,12 +167,6 @@ class LightningExperiment(pl.LightningModule):
                     *batch["data"].size()[-3:],
                 ]
             )
-            loss = torch.zeros([self.n_aleatoric_samples])
-            # for idx, sample in enumerate(samples):
-            # loss[idx] = self.dice_loss(sample, target) + self.ce_loss(
-            #     sample, target
-            # )
-            # loss[idx] = self.ce_loss(sample, target)
             target = target.unsqueeze(1)
             target = target.expand((self.n_aleatoric_samples,) + target.shape)
             flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
@@ -187,7 +180,6 @@ class LightningExperiment(pl.LightningModule):
                 - math.log(self.n_aleatoric_samples)
             )
             loss = -loglikelihood
-            # loss = torch.mean(loss)
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
