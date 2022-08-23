@@ -167,7 +167,7 @@ def calculate_test_metrics(
     return metrics_dict
 
 
-def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> float:
+def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> Dict:
     dist_gt_pred = []
     for seg_idx in range(ground_truth.shape[0]):
         gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
@@ -199,8 +199,47 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> f
             )
             dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=0)
             dist_gt_gt.append(dist)
+    ged = 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
 
-    return 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
+    if ground_truth.shape[0] > 1:
+        max_dice_rater = []
+        for seg_idx in range(ground_truth.shape[0]):
+            gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
+            max_dice = 0
+            for pred_idx in range(output_softmax.shape[0]):
+                pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
+                    torch.FloatTensor
+                )
+                dice_score = dice(pred_softmax, gt_seg, ignore_index=0)
+                if dice_score > max_dice:
+                    max_dice = dice_score
+            max_dice_rater.append(max_dice)
+
+        dice_sum = 0
+        for pred_idx in range(output_softmax.shape[0]):
+            pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
+                torch.FloatTensor
+            )
+            max_dice = 0
+            for seg_idx in range(ground_truth.shape[0]):
+                gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(
+                    torch.LongTensor
+                )
+                dice_score = dice(pred_softmax, gt_seg, ignore_index=0)
+                if dice_score > max_dice:
+                    max_dice = dice_score
+            dice_sum += max_dice
+        min_over_preds = dice_sum / output_softmax.shape[0]
+
+    # ged_v2 = ged + dist_mean
+    ged_dict = {}
+    ged_dict["ged"] = ged
+    if ground_truth.shape[0] > 1:
+        for idx, rater_dist in enumerate(max_dice_rater):
+            ged_dict["max dice rater {}".format(idx)] = rater_dist.item()
+        ged_dict["max dice pred"] = min_over_preds.item()
+
+    return ged_dict
 
 
 def predict_cases_ssn(
@@ -368,8 +407,10 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                     * value["softmax_pred"].shape[0]
                 )
             )
-            ged = calculate_ged(torch.from_numpy(softmax_pred), torch.from_numpy(gt))
-            metrics_dict["ged"] = ged
+            ged_dict = calculate_ged(
+                torch.from_numpy(softmax_pred), torch.from_numpy(gt)
+            )
+            metrics_dict.update(ged_dict)
         test_datacarrier.data[key]["metrics"] = metrics_dict
 
 
