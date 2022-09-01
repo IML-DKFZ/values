@@ -17,7 +17,12 @@ class DataCarrier3D:
         self.save_pred_prob_dir = None
 
     def _create_save_dirs(
-        self, root_dir: str, exp_name: str, version: int, sigma_save_dir: bool
+        self,
+        root_dir: str,
+        exp_name: str,
+        version: int,
+        sigma_save_dir: bool,
+        id: bool = None,
     ) -> None:
         """
         Create the directories to store the test results in.
@@ -26,7 +31,15 @@ class DataCarrier3D:
             exp_name: Name of the experiment
             version: version of the experiment
         """
-        self.save_dir = os.path.join(root_dir, exp_name, "test_results", str(version))
+        if id is None:
+            self.save_dir = os.path.join(
+                root_dir, exp_name, "test_results", str(version)
+            )
+        else:
+            id_str = "id" if id else "ood"
+            self.save_dir = os.path.join(
+                root_dir, exp_name, "test_results", str(version), id_str
+            )
         self.save_input_dir = os.path.join(self.save_dir, "input")
         self.save_gt_dir = os.path.join(self.save_dir, "gt_seg")
         self.save_pred_dir = os.path.join(self.save_dir, "pred_seg")
@@ -169,6 +182,7 @@ class DataCarrier3D:
         exp_name: str,
         version: int,
         org_data_path: str = None,
+        id: bool = None,
     ) -> None:
         """
         Saves the data according to the folder structure in _create_save_dirs
@@ -177,6 +191,7 @@ class DataCarrier3D:
             exp_name: Name of the experiment
             version: version of the experiment
             org_data_path: The path to the original data to infer header information
+            id: whether to predict id cases (lidc dataset)
         """
         sigma_save_dir = False
         if "sigma" in list(self.data.values())[0]:
@@ -186,6 +201,7 @@ class DataCarrier3D:
             exp_name=exp_name,
             version=version,
             sigma_save_dir=sigma_save_dir,
+            id=id,
         )
         for key, value in self.data.items():
             data = np.asarray(
