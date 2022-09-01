@@ -152,6 +152,8 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze()
+        if len(target.shape) == 3:
+            target = target.unsqueeze(0)
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
