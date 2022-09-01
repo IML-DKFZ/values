@@ -1,0 +1,20 @@
+defaults:
+  - datamodule: lidc_idri_config
+  - model: unet3D_config
+exp_name: "Softmax"
+version: "test"
+data_input_dir: "/media/kahl/Data2/LIDC-IDRI/CroppedData"
+save_dir: "/media/kahl/Data2/LIDC-IDRI/ShiftAnalysis"
+seed: 123
+max_epochs: 150
+batch_size: 8
+learning_rate: 3.0e-4
+weight_decay: 10.0e-6
+gpus: '1'
+logger:
+  _target_: pytorch_lightning.loggers.TensorBoardLogger
+  save_dir: ${save_dir}
+  name: ${exp_name}
+progress_bar:
+  _target_: pytorch_lightning.callbacks.TQDMProgressBar
+  refresh_rate: 10
