@@ -76,7 +76,10 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
         # Create splits.pkl file if this is not already existing to define the splits
         if not os.path.exists(
             os.path.join(
-                self.data_input_dir, "splits_{}.pkl".format(self.shift_feature)
+                self.data_input_dir,
+                "splits_{}.pkl".format(
+                    self.shift_feature if self.shift_feature is not None else "all"
+                ),
             )
         ):
             print(
@@ -88,7 +91,7 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             print(self.seed)
             self.create_splits(
                 output_dir=os.path.join(self.data_input_dir),
-                metadata_csv="{}/id_ood.csv".format(self.data_input_dir),
+                metadata_csv="{}/id_ood_allLabelled.csv".format(self.data_input_dir),
                 shift_feature=self.shift_feature,
                 seed=self.seed,
                 n_splits=self.data_num_folds,
@@ -103,7 +106,10 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
         """
         with open(
             os.path.join(
-                self.data_input_dir, "splits_{}.pkl".format(self.shift_feature)
+                self.data_input_dir,
+                "splits_{}.pkl".format(
+                    self.shift_feature if self.shift_feature is not None else "all"
+                ),
             ),
             "rb",
         ) as f:
@@ -219,29 +225,32 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
         metadata_df["Image Save Path"] = metadata_df["Image Save Path"].apply(
             lambda path: "{}.npy".format(path.split("/")[-1].split(".")[0])
         )
-
-        # get OOD images
-        # shift feature is given with "_" as separator in params,
-        # while it is separated with space in the pandas dataframe
-        # (only relevant for internal_Structure vs. internalStructure)
-        # -> needs to be considered when accessing column in df
-        metadata_df["{}_id_bool".format(shift_feature)] = (
-            metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
-            .fillna(False)
-            .astype(bool)
-        )
-        metadata_df["{}_ood_bool".format(shift_feature)] = (
-            ~metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
-            .fillna(True)
-            .astype(bool)
-        )
-        npy_ood_files = metadata_df.loc[
-            metadata_df["{}_ood_bool".format(shift_feature)], "Image Save Path"
-        ].tolist()
-        # get ID images
-        npy_id_files = metadata_df.loc[
-            metadata_df["{}_id_bool".format(shift_feature)], "Image Save Path"
-        ].tolist()
+        if shift_feature is None:
+            npy_id_files = metadata_df["Image Save Path"].tolist()
+            npy_ood_files = []
+        else:
+            # get OOD images
+            # shift feature is given with "_" as separator in params,
+            # while it is separated with space in the pandas dataframe
+            # (only relevant for internal_Structure vs. internalStructure)
+            # -> needs to be considered when accessing column in df
+            metadata_df["{}_id_bool".format(shift_feature)] = (
+                metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
+                .fillna(False)
+                .astype(bool)
+            )
+            metadata_df["{}_ood_bool".format(shift_feature)] = (
+                ~metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
+                .fillna(True)
+                .astype(bool)
+            )
+            npy_ood_files = metadata_df.loc[
+                metadata_df["{}_ood_bool".format(shift_feature)], "Image Save Path"
+            ].tolist()
+            # get ID images
+            npy_id_files = metadata_df.loc[
+                metadata_df["{}_id_bool".format(shift_feature)], "Image Save Path"
+            ].tolist()
 
         id_train, id_test = train_test_split(np.array(npy_id_files), test_size=0.2)
 
@@ -258,7 +267,13 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             splits.append(split_dict)
 
         with open(
-            os.path.join(output_dir, "splits_{}.pkl".format(shift_feature)), "wb"
+            os.path.join(
+                output_dir,
+                "splits_{}.pkl".format(
+                    shift_feature if shift_feature is not None else "all"
+                ),
+            ),
+            "wb",
         ) as f:
             pickle.dump(splits, f)
 
