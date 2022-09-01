@@ -18,7 +18,6 @@ from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
-from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
 from uncertainty_modeling.models.ssn_unet3D_module import SsnUNet3D
 from loss_modules import SoftDiceLoss
 from tqdm import tqdm
@@ -80,6 +79,12 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         default=1,
         help="Number of predictions to make by the model",
     )
+    parser.add_argument(
+        "--id",
+        type=bool,
+        default=True,
+        help="Whether to predict on the id data (LIDC-IDRI dataset)",
+    )
     with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -116,6 +121,48 @@ def dir_and_subjects_from_train(
     subject_ids = splits[fold]["test"]
 
     test_data_dir = os.path.join(data_input_dir, dataset_name, "preprocessed")
+    return test_data_dir, subject_ids
+
+
+def dir_and_subjects_from_train_lidc(
+    hparams: Dict, args: Namespace, id: bool = True
+) -> Tuple[str, List[str]]:
+    """
+    Get the test samples from the training configuration loaded through the checkpoint
+    Args:
+        hparams: The hyperparameters from the checkpoint. Needed to infer the path where the test data is as well
+                 as the subject ids that are in the test data
+        args: Arguments for testing, possibly specifying a data_input_dir
+        id: whether to predict id cases
+
+    Returns:
+        test_data_dir [str]: The directory which contains the test images
+        subject_ids [List[str]]: The list of the subject ids which should be inferred during testing
+    """
+
+    data_input_dir = (
+        args.data_input_dir
+        if args.data_input_dir is not None
+        else hparams["data_input_dir"]
+    )
+    # dataset_name = hparams["datamodule"]["dataset_name"]
+    shift_feature = hparams["datamodule"]["shift_feature"]
+
+    with open(
+        os.path.join(
+            data_input_dir,
+            "splits_{}.pkl".format(shift_feature)
+            if shift_feature is not None
+            else "all",
+        ),
+        "rb",
+    ) as f:
+        splits = pickle.load(f)
+    fold = hparams["datamodule"]["data_fold_id"]
+    id_str = "id" if id else "ood"
+    subject_ids = splits[fold]["{}_test".format(id_str)]
+
+    test_data_dir = os.path.join(data_input_dir, "preprocessed")
     return test_data_dir, subject_ids
 
 
@@ -431,14 +478,23 @@ def save_results(
         if args.data_input_dir is not None
         else hparams["data_input_dir"]
     )
-    test_datacarrier.save_data(
-        root_dir=save_dir,
-        exp_name=hparams["exp_name"],
-        version=hparams["version"],
-        org_data_path=os.path.join(
-            data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTs"
-        ),
-    )
+    if "shift_feature" in hparams["datamodule"]:
+        test_datacarrier.save_data(
+            root_dir=save_dir,
+            exp_name=hparams["exp_name"],
+            version=hparams["version"],
+            org_data_path=os.path.join(data_input_dir, "images"),
+            id=args.id,
+        )
+    else:
+        test_datacarrier.save_data(
+            root_dir=save_dir,
+            exp_name=hparams["exp_name"],
+            version=hparams["version"],
+            org_data_path=os.path.join(
+                data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTs"
+            ),
+        )
     test_datacarrier.log_metrics()
 
 
@@ -460,9 +516,20 @@ def run_test(args: Namespace) -> None:
 
     # No test data dir specified, so data should be in same input dir as training data and split should be specified
     if test_data_dir is None:
-        test_data_dir, subject_ids = dir_and_subjects_from_train(hparams, args)
+        if "shift_feature" in hparams["datamodule"]:
+            test_data_dir, subject_ids = dir_and_subjects_from_train_lidc(
+                hparams, args, args.id
+            )
+        else:
+            test_data_dir, subject_ids = dir_and_subjects_from_train(hparams, args)
 
     test_datacarrier = DataCarrier3D()
+    if "shift_feature" in hparams["datamodule"]:
+        from uncertainty_modeling.lidc_idri_datamodule_3D import (
+            get_val_test_data_samples,
+        )
+    else:
+        from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
     data_samples = get_val_test_data_samples(
         base_dir=test_data_dir,
         subject_ids=subject_ids,
