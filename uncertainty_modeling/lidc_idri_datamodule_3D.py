@@ -91,7 +91,7 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             print(self.seed)
             self.create_splits(
                 output_dir=os.path.join(self.data_input_dir),
-                metadata_csv="{}/id_ood_allLabelled.csv".format(self.data_input_dir),
+                metadata_csv="{}/id_ood.csv".format(self.data_input_dir),
                 shift_feature=self.shift_feature,
                 seed=self.seed,
                 n_splits=self.data_num_folds,
@@ -226,33 +226,74 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             lambda path: "{}.npy".format(path.split("/")[-1].split(".")[0])
         )
         if shift_feature is None:
-            npy_id_files = metadata_df["Image Save Path"].tolist()
-            npy_ood_files = []
+            id_train_patients = set(metadata_df["Patient ID"].unique())
+            ood_patients = set()
+
         else:
             # get OOD images
             # shift feature is given with "_" as separator in params,
             # while it is separated with space in the pandas dataframe
             # (only relevant for internal_Structure vs. internalStructure)
             # -> needs to be considered when accessing column in df
-            metadata_df["{}_id_bool".format(shift_feature)] = (
-                metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
-                .fillna(False)
-                .astype(bool)
-            )
-            metadata_df["{}_ood_bool".format(shift_feature)] = (
-                ~metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
-                .fillna(True)
-                .astype(bool)
-            )
-            npy_ood_files = metadata_df.loc[
-                metadata_df["{}_ood_bool".format(shift_feature)], "Image Save Path"
-            ].tolist()
-            # get ID images
-            npy_id_files = metadata_df.loc[
-                metadata_df["{}_id_bool".format(shift_feature)], "Image Save Path"
-            ].tolist()
+            ood_patients = set()
+            for index, row in metadata_df.iterrows():
+                if row["{}_id".format(" ".join(shift_feature.split("_")))] == False:
+                    ood_patients.add(row["Patient ID"])
+            id_train_patients = set()
+            for index, row in metadata_df.iterrows():
+                if (
+                    row["Patient ID"] not in ood_patients
+                    and row["{}_id".format(" ".join(shift_feature.split("_")))] == True
+                ):
+                    id_train_patients.add(row["Patient ID"])
+        id_test = []
+        id_train = []
+        npy_ood_files = []
+        for index, row in metadata_df.iterrows():
+            if (
+                row["Patient ID"] in ood_patients
+                and row["{}_id".format(" ".join(shift_feature.split("_")))] == False
+            ):
+                npy_ood_files.append(row["Image Save Path"])
+            elif (
+                row["Patient ID"] in ood_patients
+                and row["{}_id".format(" ".join(shift_feature.split("_")))] == True
+            ):
+                id_test.append(row["Image Save Path"])
+            elif (
+                row["Patient ID"] in id_train_patients
+                and row["{}_id".format(" ".join(shift_feature.split("_")))] == True
+            ):
+                id_train.append(row["Image Save Path"])
 
-        id_train, id_test = train_test_split(np.array(npy_id_files), test_size=0.2)
+        all_id_cases = len(id_train) + len(id_test)
+        num_id_train = int(0.8 * all_id_cases)
+        num_id_test = all_id_cases - num_id_train
+        id_test_patients = set()
+        num_to_add = num_id_test - len(id_test)
+
+        nodules_to_add_test = []
+
+        while len(nodules_to_add_test) < num_to_add:
+            patient_to_add_test = random.choice(sorted(list(id_train_patients)))
+            id_test_patients.add(patient_to_add_test)
+            id_train_patients.remove(patient_to_add_test)
+            nodules_to_add_test.extend(
+                metadata_df.loc[
+                    (metadata_df["Patient ID"] == patient_to_add_test)
+                    & (
+                        metadata_df["{}_id".format(" ".join(shift_feature.split("_")))]
+                        == True
+                    ),
+                    "Image Save Path",
+                ].tolist()
+            )
+
+        id_test.extend(nodules_to_add_test)
+        id_train = [path for path in id_train if path not in nodules_to_add_test]
+        assert len(id_train_patients) + len(ood_patients) + len(
+            id_test_patients
+        ) == len(id_train_patients.union(ood_patients).union(id_test_patients))
 
         kfold = KFold(n_splits=n_splits, shuffle=True, random_state=seed)
         # create fold dictionary and append it to splits
