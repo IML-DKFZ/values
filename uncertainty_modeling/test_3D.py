@@ -248,7 +248,7 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
         max_dice_rater = []
         for seg_idx in range(ground_truth.shape[0]):
             gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
-            max_dice = 0
+            max_dice = torch.tensor(0, dtype=torch.float)
             for pred_idx in range(output_softmax.shape[0]):
                 pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
                     torch.FloatTensor
@@ -258,12 +258,12 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
                     max_dice = dice_score
             max_dice_rater.append(max_dice)
 
-        dice_sum = 0
+        dice_sum = torch.tensor(0, dtype=torch.float)
         for pred_idx in range(output_softmax.shape[0]):
             pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
                 torch.FloatTensor
             )
-            max_dice = 0
+            max_dice = torch.tensor(0, dtype=torch.float)
             for seg_idx in range(ground_truth.shape[0]):
                 gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(
                     torch.LongTensor
