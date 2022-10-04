@@ -79,12 +79,8 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         default=1,
         help="Number of predictions to make by the model",
     )
-    parser.add_argument(
-        "--id",
-        type=bool,
-        default=True,
-        help="Whether to predict on the id data (LIDC-IDRI dataset)",
-    )
+    parser.add_argument("--id", dest="id", action="store_true")
+    parser.add_argument("--ood", dest="id", action="store_false")
     with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
