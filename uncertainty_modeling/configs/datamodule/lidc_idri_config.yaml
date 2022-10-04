@@ -7,4 +7,3 @@ batch_size: 8
 patch_size: 64
 patch_overlap: 1
 num_workers: 8
-seed: 123
