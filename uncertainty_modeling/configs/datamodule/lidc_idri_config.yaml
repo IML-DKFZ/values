@@ -1,5 +1,5 @@
 _target_: uncertainty_modeling.lidc_idri_datamodule_3D.LidcIdriDataModule3D
-shift_feature: null
+shift_feature: "texture"
 num_raters: 4
 data_num_folds: 5
 data_fold_id: 0
@@ -7,3 +7,4 @@ batch_size: 8
 patch_size: 64
 patch_overlap: 1
 num_workers: 8
+splits_path: "/media/kahl/Data2/LIDC-IDRI/CroppedData/splits_texture.pkl"
