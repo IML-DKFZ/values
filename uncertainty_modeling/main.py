@@ -1,8 +1,10 @@
 import os
 
 import hydra.utils
+import numpy as np
 import torch
 from argparse import Namespace, ArgumentParser
+import random
 
 import pytorch_lightning as pl
 from omegaconf import DictConfig, OmegaConf, open_dict
@@ -14,6 +16,18 @@ def pl_cli():
     parser = pl.Trainer.add_argparse_args(parser)
     hparams, _ = parser.parse_known_args()
     return hparams
+
+
+def set_seed(seed):
+    print("SETTING GLOBAL SEED")
+    pl.seed_everything(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 @hydra.main(config_path="configs", config_name="default_config")
@@ -38,8 +52,7 @@ def main(cfg_hydra: DictConfig):
         config.version = os.environ["LSB_JOBID"]
 
     if config.seed is not None:
-        pl.seed_everything(config.seed)
-        torch.use_deterministic_algorithms(True, warn_only=True)
+        set_seed(config.seed)
 
     logger = hydra.utils.instantiate(config.logger, version=config.version)
     progress_bar = hydra.utils.instantiate(config.progress_bar)
@@ -48,6 +61,7 @@ def main(cfg_hydra: DictConfig):
         logger=logger,
         profiler="simple",
         callbacks=progress_bar,
+        deterministic="warn",
     )
 
     dm = hydra.utils.instantiate(
