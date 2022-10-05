@@ -32,6 +32,7 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
         patch_overlap: float = 1,
         num_workers: int = 8,
         seed: int = 42,
+        splits_path: str = None,
         *args,
         **kwargs,
     ):
@@ -49,6 +50,15 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
         self.patch_overlap = patch_overlap
         self.num_workers = num_workers
         self.seed = seed
+        if splits_path is not None:
+            self.splits_path = splits_path
+        else:
+            self.splits_path = os.path.join(
+                self.data_input_dir,
+                "splits_{}.pkl".format(
+                    self.shift_feature if self.shift_feature is not None else "all"
+                ),
+            )
 
         # split keys are set in setup()
         self.tr_keys = None
@@ -74,45 +84,34 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             )
 
         # Create splits.pkl file if this is not already existing to define the splits
-        if not os.path.exists(
-            os.path.join(
-                self.data_input_dir,
-                "splits_{}.pkl".format(
-                    self.shift_feature if self.shift_feature is not None else "all"
-                ),
-            )
-        ):
+        if not os.path.exists(self.splits_path):
             print(
                 "No splits pickle file found."
-                "Creating new splits file for {} fold cross-validation and feature shift {}.".format(
-                    self.data_num_folds, self.shift_feature
+                "Creating new splits file for {} fold cross-validation at path {} for shift feature {}.".format(
+                    self.data_num_folds, self.splits_path, self.shift_feature
                 )
             )
             print(self.seed)
             self.create_splits(
-                output_dir=os.path.join(self.data_input_dir),
+                output_path=self.splits_path,
                 metadata_csv="{}/id_ood.csv".format(self.data_input_dir),
                 shift_feature=self.shift_feature,
                 seed=self.seed,
                 n_splits=self.data_num_folds,
             )
         else:
-            print("Splits files found. Using the folds specified in the file.")
+            print(
+                "Splits files found at path {}. Using the folds specified in the file.".format(
+                    self.splits_path
+                )
+            )
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load the keys for training, validation and testing
         Args:
             stage: The current stage of training
         """
-        with open(
-            os.path.join(
-                self.data_input_dir,
-                "splits_{}.pkl".format(
-                    self.shift_feature if self.shift_feature is not None else "all"
-                ),
-            ),
-            "rb",
-        ) as f:
+        with open(self.splits_path, "rb") as f:
             splits = pickle.load(f)
         self.tr_keys = splits[self.data_fold_id]["train"]
         self.val_keys = splits[self.data_fold_id]["val"]
@@ -194,12 +193,12 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
 
     @staticmethod
     def create_splits(
-        output_dir, shift_feature, metadata_csv, seed, n_splits=5
+        output_path, shift_feature, metadata_csv, seed, n_splits=5
     ) -> None:
         """Saves a pickle file containing the splits for k-fold cv on the dataset
 
         Args:
-            output_dir: The output directory where to save the splits file, i.e. the dataset directory
+            output_path: The output path where to save the splits file
             image_dir: The directory of the preprocessed training/ validation images
             test_dir: The directory of the preprocessed test images
             seed: The seed for the splits
@@ -307,15 +306,7 @@ class LidcIdriDataModule3D(pl.LightningDataModule):
             split_dict["ood_test"] = np.array(npy_ood_files)
             splits.append(split_dict)
 
-        with open(
-            os.path.join(
-                output_dir,
-                "splits_{}.pkl".format(
-                    shift_feature if shift_feature is not None else "all"
-                ),
-            ),
-            "wb",
-        ) as f:
+        with open(output_path, "wb") as f:
             pickle.dump(splits, f)
 
     def train_dataloader(self):
