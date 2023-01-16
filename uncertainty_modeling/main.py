@@ -54,6 +54,13 @@ def main(cfg_hydra: DictConfig):
     if config.seed is not None:
         set_seed(config.seed)
 
+    if "gradient_clip_val" in config.keys():
+        gradient_clip_val = config.gradient_clip_val
+        gradient_clip_algorithm = "norm"
+    else:
+        gradient_clip_val = None
+        gradient_clip_algorithm = None
+
     logger = hydra.utils.instantiate(config.logger, version=config.version)
     progress_bar = hydra.utils.instantiate(config.progress_bar)
     trainer = pl.Trainer.from_argparse_args(
@@ -62,6 +69,8 @@ def main(cfg_hydra: DictConfig):
         profiler="simple",
         callbacks=progress_bar,
         deterministic="warn",
+        gradient_clip_val=gradient_clip_val,
+        gradient_clip_algorithm=gradient_clip_algorithm,
     )
 
     dm = hydra.utils.instantiate(
