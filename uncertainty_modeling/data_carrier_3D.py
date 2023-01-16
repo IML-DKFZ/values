@@ -22,7 +22,7 @@ class DataCarrier3D:
         exp_name: str,
         version: int,
         sigma_save_dir: bool,
-        id: bool = None,
+        test_split: str = "id",
     ) -> None:
         """
         Create the directories to store the test results in.
@@ -36,9 +36,8 @@ class DataCarrier3D:
                 root_dir, exp_name, "test_results", str(version)
             )
         else:
-            id_str = "id" if id else "ood"
             self.save_dir = os.path.join(
-                root_dir, exp_name, "test_results", str(version), id_str
+                root_dir, exp_name, "test_results", str(version), test_split
             )
         self.save_input_dir = os.path.join(self.save_dir, "input")
         self.save_gt_dir = os.path.join(self.save_dir, "gt_seg")
@@ -182,7 +181,7 @@ class DataCarrier3D:
         exp_name: str,
         version: int,
         org_data_path: str = None,
-        id: bool = None,
+        test_split: str = "id",
     ) -> None:
         """
         Saves the data according to the folder structure in _create_save_dirs
@@ -201,7 +200,7 @@ class DataCarrier3D:
             exp_name=exp_name,
             version=version,
             sigma_save_dir=sigma_save_dir,
-            id=id,
+            test_split=test_split,
         )
         for key, value in self.data.items():
             data = np.asarray(

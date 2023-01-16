@@ -79,8 +79,15 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         default=1,
         help="Number of predictions to make by the model",
     )
-    parser.add_argument("--id", dest="id", action="store_true")
-    parser.add_argument("--ood", dest="id", action="store_false")
+
+    parser.add_argument(
+        "--test_split",
+        type=str,
+        default="id",
+        help="The key of the test split to use for prediction. If 'unlabeled', uses both, the id and ood unlabeled data",
+    )
+    # parser.add_argument("--id", dest="id", action="store_true")
+    # parser.add_argument("--ood", dest="id", action="store_false")
     with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -121,7 +128,7 @@ def dir_and_subjects_from_train(
 
 
 def dir_and_subjects_from_train_lidc(
-    hparams: Dict, args: Namespace, id: bool = True
+    hparams: Dict, args: Namespace, test_split: str = "id"
 ) -> Tuple[str, List[str]]:
     """
     Get the test samples from the training configuration loaded through the checkpoint
@@ -144,19 +151,42 @@ def dir_and_subjects_from_train_lidc(
     # dataset_name = hparams["datamodule"]["dataset_name"]
     shift_feature = hparams["datamodule"]["shift_feature"]
 
-    with open(
-        os.path.join(
+    if "splits_path" in hparams["datamodule"].keys():
+        if hparams["datamodule"]["splits_path"] is not None:
+            if args.data_input_dir is not None:
+                splits_path = hparams["datamodule"]["splits_path"].replace(
+                    hparams["data_input_dir"], args.data_input_dir
+                )
+            else:
+                splits_path = hparams["datamodule"]["splits_path"]
+        else:
+            splits_path = os.path.join(
+                data_input_dir,
+                "splits_{}.pkl".format(shift_feature)
+                if shift_feature is not None
+                else "all",
+            )
+    else:
+        splits_path = os.path.join(
             data_input_dir,
             "splits_{}.pkl".format(shift_feature)
             if shift_feature is not None
             else "all",
-        ),
+        )
+
+    with open(
+        splits_path,
         "rb",
     ) as f:
         splits = pickle.load(f)
     fold = hparams["datamodule"]["data_fold_id"]
-    id_str = "id" if id else "ood"
-    subject_ids = splits[fold]["{}_test".format(id_str)]
+    if test_split == "unlabeled":
+        subject_ids = splits[fold]["id_unlabeled_pool"]
+        subject_ids = np.concatenate((subject_ids, splits[fold]["ood_unlabeled_pool"]))
+    elif test_split == "val":
+        subject_ids = splits[fold]["val"]
+    else:
+        subject_ids = splits[fold]["{}_test".format(test_split)]
 
     test_data_dir = os.path.join(data_input_dir, "preprocessed")
     return test_data_dir, subject_ids
@@ -202,12 +232,32 @@ def calculate_test_metrics(
     """
     dice_loss = SoftDiceLoss()
     nll_loss = torch.nn.NLLLoss()
-    test_loss = dice_loss(output_softmax, ground_truth) + nll_loss(
-        torch.log(output_softmax), ground_truth
-    )
-    test_dice = dice(output_softmax, ground_truth, ignore_index=0)
-    metrics_dict = {"loss": test_loss.item(), "dice": test_dice.item()}
+
+    all_test_loss = []
+    all_test_dice = []
+    for rater in range(ground_truth.size(dim=0)):
+        gt_seg = ground_truth[rater]
+        gt_seg = torch.unsqueeze(gt_seg, 0).type(torch.LongTensor)
+
+        test_loss = dice_loss(output_softmax, gt_seg) + nll_loss(
+            torch.log(output_softmax), gt_seg
+        )
+        test_dice = dice(output_softmax, gt_seg, ignore_index=0)
+        all_test_loss.append(test_loss.item())
+        all_test_dice.append(test_dice.item())
+    metrics_dict = {
+        "loss": np.mean(np.array(all_test_loss)),
+        "dice": np.mean(np.array(all_test_dice)),
+    }
     return metrics_dict
+    # dice_loss = SoftDiceLoss()
+    # nll_loss = torch.nn.NLLLoss()
+    # test_loss = dice_loss(output_softmax, ground_truth) + nll_loss(
+    #     torch.log(output_softmax), ground_truth
+    # )
+    # test_dice = dice(output_softmax, ground_truth, ignore_index=0)
+    # metrics_dict = {"loss": test_loss.item(), "dice": test_dice.item()}
+    # return metrics_dict
 
 
 def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> Dict:
@@ -374,7 +424,9 @@ def predict_cases(
     return test_datacarrier
 
 
-def caculcate_uncertainty_multiple_pred(test_datacarrier: DataCarrier3D) -> None:
+def caculcate_uncertainty_multiple_pred(
+    test_datacarrier: DataCarrier3D, ssn: bool = False
+) -> None:
     for key, value in test_datacarrier.data.items():
         softmax_preds = torch.from_numpy(value["softmax_pred"])
         mean_softmax = torch.mean(softmax_preds, dim=0)
@@ -386,7 +438,7 @@ def caculcate_uncertainty_multiple_pred(test_datacarrier: DataCarrier3D) -> None
         for y in range(mean_softmax.shape[0]):
             pred_entropy += mean_softmax[y] * torch.log(mean_softmax[y])
         pred_entropy *= -1
-        aleatoric_uncertainty = torch.zeros(
+        expected_entropy = torch.zeros(
             softmax_preds.shape[0],
             softmax_preds.shape[2],
             softmax_preds.shape[3],
@@ -403,12 +455,16 @@ def caculcate_uncertainty_multiple_pred(test_datacarrier: DataCarrier3D) -> None
                     softmax_preds[pred, y, :, :, :]
                 )
             entropy *= -1
-            aleatoric_uncertainty[pred] = entropy
-        aleatoric_uncertainty = torch.mean(aleatoric_uncertainty, dim=0)
-        epistemic_uncertainty = pred_entropy - aleatoric_uncertainty
+            expected_entropy[pred] = entropy
+        expected_entropy = torch.mean(expected_entropy, dim=0)
+        mutual_information = pred_entropy - expected_entropy
         value["pred_entropy"] = pred_entropy
-        value["aleatoric_uncertainty"] = aleatoric_uncertainty
-        value["epistemic_uncertainty"] = epistemic_uncertainty
+        if not ssn:
+            value["aleatoric_uncertainty"] = expected_entropy
+            value["epistemic_uncertainty"] = mutual_information
+        else:
+            value["aleatoric_uncertainty"] = mutual_information
+            value["epistemic_uncertainty"] = expected_entropy
         # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
     return
 
@@ -419,6 +475,7 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
     Args:
         test_datacarrier: The datacarrier with the concatenated data
     """
+    print("New metrics calculation")
     for key, value in test_datacarrier.data.items():
         mean_softmax_pred = torch.mean(
             torch.from_numpy(
@@ -427,13 +484,7 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
             dim=0,
         )
         mean_softmax_pred = torch.unsqueeze(mean_softmax_pred, 0)
-        rater = random.randint(0, value["seg"].shape[0] - 1)
-        gt_seg = torch.from_numpy(
-            np.asarray(
-                value["seg"][rater] / np.clip(value["num_predictions"], 1, None)[0]
-            )
-        )
-        gt_seg = torch.unsqueeze(gt_seg, 0).type(torch.LongTensor)
+        gt_seg = torch.from_numpy(np.asarray(value["seg"]))
         metrics_dict = calculate_test_metrics(mean_softmax_pred, gt_seg)
         if value["seg"].shape[0] > 1 or value["softmax_pred"].shape[0] > 1:
             gt = np.asarray(
@@ -480,7 +531,7 @@ def save_results(
             exp_name=hparams["exp_name"],
             version=hparams["version"],
             org_data_path=os.path.join(data_input_dir, "images"),
-            id=args.id,
+            test_split=args.test_split,
         )
     else:
         test_datacarrier.save_data(
@@ -514,7 +565,7 @@ def run_test(args: Namespace) -> None:
     if test_data_dir is None:
         if "shift_feature" in hparams["datamodule"]:
             test_data_dir, subject_ids = dir_and_subjects_from_train_lidc(
-                hparams, args, args.id
+                hparams, args, args.test_split
             )
         else:
             test_data_dir, subject_ids = dir_and_subjects_from_train(hparams, args)
@@ -537,10 +588,12 @@ def run_test(args: Namespace) -> None:
 
     models = load_models_from_checkpoint(all_checkpoints)
     # data_samples = [data_samples[0]]
+    ssn = False
     if isinstance(models[0], SsnUNet3D) and len(models) == 1:
         test_datacarrier = predict_cases_ssn(
             test_datacarrier, data_samples, models[0], args.n_pred
         )
+        ssn = True
     elif "n_aleatoric_samples" in hparams:
         test_datacarrier = predict_cases(
             test_datacarrier,
@@ -554,7 +607,7 @@ def run_test(args: Namespace) -> None:
             test_datacarrier, data_samples, models, args.n_pred
         )
     if args.n_pred > 1 or len(models) > 1:
-        caculcate_uncertainty_multiple_pred(test_datacarrier)
+        caculcate_uncertainty_multiple_pred(test_datacarrier, ssn)
     calculate_metrics(test_datacarrier)
     save_results(test_datacarrier, hparams, args)
 
