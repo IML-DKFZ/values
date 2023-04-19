@@ -132,7 +132,7 @@ class ToyDataModule3D(pl.LightningDataModule):
             os.makedirs(output_dir_images, exist_ok=True)
             os.makedirs(output_dir_labels, exist_ok=True)
 
-            nii_files = subfiles(image_dir, suffix=".nii.gz", join=False)
+            nii_files = subfiles(image_dir, suffix=".nii.gz", prefix="0", join=False)
 
             all_images = []
             all_labels = []
@@ -530,7 +530,7 @@ def get_train_data_samples(
     (image_dir, _, image_filenames) = next(os.walk(os.path.join(base_dir, "imagesTr")))
     (label_dir, _, label_filenames) = next(os.walk(os.path.join(base_dir, "labelsTr")))
     for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
-        if subject_ids is not None and image_filename in subject_ids:
+        if subject_ids is None or image_filename in subject_ids:
             image_path = os.path.join(image_dir, image_filename)
 
             label_paths = []
@@ -593,7 +593,7 @@ def get_val_test_data_samples(
         os.walk(os.path.join(base_dir, "labels{}".format(train_test)))
     )
     for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
-        if subject_ids is not None and image_filename in subject_ids:
+        if subject_ids is None or image_filename in subject_ids:
             image_path = os.path.join(image_dir, image_filename)
 
             label_paths = []

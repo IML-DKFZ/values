@@ -20,6 +20,7 @@ from batchgenerators.transforms.utility_transforms import NumpyToTensor
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
 from uncertainty_modeling.models.ssn_unet3D_module import SsnUNet3D
 from loss_modules import SoftDiceLoss
+from main import set_seed
 from tqdm import tqdm
 
 
@@ -121,7 +122,8 @@ def dir_and_subjects_from_train(
     with open(os.path.join(data_input_dir, dataset_name, "splits.pkl"), "rb") as f:
         splits = pickle.load(f)
     fold = hparams["datamodule"]["data_fold_id"]
-    subject_ids = splits[fold]["test"]
+    print(args.test_split)
+    subject_ids = splits[fold][args.test_split]
 
     test_data_dir = os.path.join(data_input_dir, dataset_name, "preprocessed")
     return test_data_dir, subject_ids
@@ -185,6 +187,8 @@ def dir_and_subjects_from_train_lidc(
         subject_ids = np.concatenate((subject_ids, splits[fold]["ood_unlabeled_pool"]))
     elif test_split == "val":
         subject_ids = splits[fold]["val"]
+    elif test_split == "train":
+        subject_ids = splits[fold]["train"]
     else:
         subject_ids = splits[fold]["{}_test".format(test_split)]
 
@@ -463,6 +467,7 @@ def caculcate_uncertainty_multiple_pred(
             value["aleatoric_uncertainty"] = expected_entropy
             value["epistemic_uncertainty"] = mutual_information
         else:
+            print("mutual information is aleatoric unc")
             value["aleatoric_uncertainty"] = mutual_information
             value["epistemic_uncertainty"] = expected_entropy
         # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
@@ -534,13 +539,22 @@ def save_results(
             test_split=args.test_split,
         )
     else:
+        if args.test_data_dir is not None:
+            org_data_path = None
+        else:
+            if args.test_split == "val" or args.test_split == "train":
+                imagesDir = "imagesTr"
+            else:
+                imagesDir = "imagesTs"
+            org_data_path = os.path.join(
+                data_input_dir, hparams["datamodule"]["dataset_name"], imagesDir
+            )
         test_datacarrier.save_data(
             root_dir=save_dir,
             exp_name=hparams["exp_name"],
             version=hparams["version"],
-            org_data_path=os.path.join(
-                data_input_dir, hparams["datamodule"]["dataset_name"], "imagesTs"
-            ),
+            org_data_path=org_data_path,
+            test_split=args.test_split,
         )
     test_datacarrier.log_metrics()
 
@@ -561,6 +575,7 @@ def run_test(args: Namespace) -> None:
         all_checkpoints.append(checkpoint)
     hparams = all_checkpoints[0]["hyper_parameters"]
 
+    set_seed(hparams["seed"])
     # No test data dir specified, so data should be in same input dir as training data and split should be specified
     if test_data_dir is None:
         if "shift_feature" in hparams["datamodule"]:
@@ -577,10 +592,14 @@ def run_test(args: Namespace) -> None:
         )
     else:
         from uncertainty_modeling.toy_datamodule_3D import get_val_test_data_samples
+    if args.test_split == "val" or args.test_split == "train":
+        test = False
+    else:
+        test = True
     data_samples = get_val_test_data_samples(
         base_dir=test_data_dir,
         subject_ids=subject_ids,
-        test=True,
+        test=test,
         num_raters=hparams["datamodule"]["num_raters"],
         patch_size=hparams["datamodule"]["patch_size"],
         patch_overlap=hparams["datamodule"]["patch_overlap"],
@@ -594,6 +613,7 @@ def run_test(args: Namespace) -> None:
             test_datacarrier, data_samples, models[0], args.n_pred
         )
         ssn = True
+        print(ssn)
     elif "n_aleatoric_samples" in hparams:
         test_datacarrier = predict_cases(
             test_datacarrier,
@@ -614,5 +634,5 @@ def run_test(args: Namespace) -> None:
 
 if __name__ == "__main__":
     arguments = test_cli()
-    random.seed(14)
+    # random.seed(14)
     run_test(arguments)

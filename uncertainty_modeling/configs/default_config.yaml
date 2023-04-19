@@ -1,10 +1,10 @@
 defaults:
-  - datamodule: case1_config
+  - datamodule: case3_config
   - model: unet3D_config
 exp_name: "Toy-Data-Test"
 version: null
-data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
-save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
+data_input_dir: "/home/kckahl/Uncertainty/ToyData"
+save_dir: "/home/kckahl/Uncertainty/ToyExperiment"
 seed: 123
 max_epochs: 2
 batch_size: 8

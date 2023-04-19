@@ -19,7 +19,7 @@ def pl_cli():
 
 
 def set_seed(seed):
-    print("SETTING GLOBAL SEED")
+    print(f"SETTING GLOBAL SEED TO {seed}")
     pl.seed_everything(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)

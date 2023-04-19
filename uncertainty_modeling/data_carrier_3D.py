@@ -39,6 +39,7 @@ class DataCarrier3D:
             self.save_dir = os.path.join(
                 root_dir, exp_name, "test_results", str(version), test_split
             )
+        print(self.save_dir)
         self.save_input_dir = os.path.join(self.save_dir, "input")
         self.save_gt_dir = os.path.join(self.save_dir, "gt_seg")
         self.save_pred_dir = os.path.join(self.save_dir, "pred_seg")
