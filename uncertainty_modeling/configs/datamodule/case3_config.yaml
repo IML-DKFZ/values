@@ -1,0 +1,10 @@
+_target_: uncertainty_modeling.toy_datamodule_3D.ToyDataModule3D
+dataset_name: "Case_3"
+num_raters: 3
+data_num_folds: 5
+data_fold_id: 0
+batch_size: 8
+patch_size: 64
+patch_overlap: 1
+num_workers: 8
+seed: 123
