@@ -1,4 +1,5 @@
-checkpoint_path: "/media/kahl/Data/Uncertainty/ToyExperiment/Softmax-Case-1/12021546/checkpoints/epoch=149-step=19558.ckpt"
-data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
-save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
-n_pred: 1
+checkpoint_paths: ["/media/kahl/Data2/LIDC-IDRI/ActiveLearning/FirstCycle/Softmax/malignancy_fold0_seed123/checkpoints/epoch=149-step=51750.ckpt"]
+test_split: "ood"
+# data_input_dir: "/media/kahl/Data2/LIDC-IDRI/CroppedData"
+# save_dir: "/media/kahl/Data2/LIDC-IDRI/ActiveLearning/FirstCycle"
+# n_pred: 10
