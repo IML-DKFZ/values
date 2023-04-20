@@ -177,10 +177,18 @@ class LightningExperiment(pl.LightningModule):
             log_prob = -F.cross_entropy(samples, target, reduction="none").view(
                 (self.n_aleatoric_samples, batch["data"].size()[0], -1)
             )
+            # dice_intersect = -self.dice_loss(samples, target, only_intersect=True).view(
+            #     (self.n_aleatoric_samples, batch["data"].size()[0])
+            # )
             loglikelihood = torch.mean(
                 torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
                 - math.log(self.n_aleatoric_samples)
             )
+            # dice_logsumexp = torch.mean(
+            #     torch.logsumexp(dice_intersect, dim=0)
+            #     - math.log(self.n_aleatoric_samples)
+            # )
+            # loss = -loglikelihood - target.size()[-1] * dice_logsumexp
             loss = -loglikelihood
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"

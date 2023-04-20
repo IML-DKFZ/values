@@ -32,7 +32,7 @@ class SoftDiceLoss(nn.Module):
             self.smooth_in_nom = 0
         self.smooth = smooth
 
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+    def forward(self, x: Tensor, y: Tensor, only_intersect: bool = False) -> Tensor:
         """
         Compute loss
 
@@ -60,12 +60,18 @@ class SoftDiceLoss(nn.Module):
             x = x[:, 1:]
             y_onehot = y_onehot[:, 1:]
 
-        l = soft_dice(x, y_onehot, self.smooth, self.smooth_in_nom)
+        l = soft_dice(
+            x, y_onehot, self.smooth, self.smooth_in_nom, only_intersect=only_intersect
+        )
         return l
 
 
 def soft_dice(
-    net_output: Tensor, gt: Tensor, smooth: float = 1.0, smooth_in_nom: float = 1.0
+    net_output: Tensor,
+    gt: Tensor,
+    smooth: float = 1.0,
+    smooth_in_nom: float = 1.0,
+    only_intersect: bool = False,
 ) -> Tensor:
     """
     Soft dice functional interface
@@ -82,5 +88,7 @@ def soft_dice(
     axes = tuple(range(2, len(net_output.size())))
     intersect = (net_output * gt).sum(axes, keepdim=False)
     denom = (net_output + gt).sum(axes, keepdim=False)
-    result = (-((2 * intersect + smooth_in_nom) / (denom + smooth))).mean()
-    return result
+    result = -((2 * intersect + smooth_in_nom) / (denom + smooth))
+    if only_intersect:
+        return result
+    return result.mean()
