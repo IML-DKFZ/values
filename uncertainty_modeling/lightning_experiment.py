@@ -152,8 +152,10 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze()
+        # TODO: why is this done here? This function probably needs adaption for 2D
         if len(target.shape) == 3:
             target = target.unsqueeze(0)
+        # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
@@ -235,11 +237,12 @@ class LightningExperiment(pl.LightningModule):
         Returns:
             val_loss [torch.Tensor]: The computed loss
         """
+        # TODO: This function probably needs adaption for 2D
         target = batch["seg"].long().squeeze()
         if len(target.size()) == 3:
             target = target.unsqueeze(0)
-
-        if self.aleatoric_loss is None:
+        # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
+        if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
                 samples = mean.rsample([self.n_aleatoric_samples])
