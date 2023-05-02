@@ -180,19 +180,19 @@ class BaseDataModule(LightningDataModule):
         """
         self.DS_train = hydra.utils.instantiate(
             self.dataset,
-            data_input_dir=self.data_input_dir,
+            base_dir=self.data_input_dir,
             split="train",
             transforms=get_augmentations(),
         )
         self.DS_val = hydra.utils.instantiate(
             self.dataset,
-            data_input_dir=self.data_input_dir,
+            base_dir=self.data_input_dir,
             split="val",
             transforms=get_augmentations(),
         )
         self.DS_test = hydra.utils.instantiate(
             self.dataset,
-            data_input_dir=self.data_input_dir,
+            base_dir=self.data_input_dir,
             split="test",
             transforms=get_augmentations(),
         )

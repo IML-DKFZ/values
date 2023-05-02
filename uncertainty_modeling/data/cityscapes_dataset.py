@@ -10,7 +10,12 @@ import cv2
 # cityscapes dataset class
 class Cityscapes_dataset(torch.utils.data.Dataset):
     def __init__(
-        self, splits_path: str, data_input_dir: str, split="train", transforms=None
+        self,
+        splits_path: str,
+        base_dir: str,
+        split="train",
+        file_pattern: str = "*.npy",
+        transforms=None,
     ):
         self.splits_path = splits_path
         self.get_split_keys()
@@ -21,16 +26,21 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         else:
             subject_ids = self.id_test_keys
 
-        ds_subjects = [subject[0] for subject in subject_ids if subject[1] == "cs"]
-        ds_dir = os.path.join(
-            data_input_dir,
-            "CityScapesOriginalData",
-            "preprocessed",
-        )
-
-        self.samples = get_data_samples(
-            base_dir=ds_dir, pattern="*.npy", subject_ids=ds_subjects
-        )
+        self.samples = []
+        for dataset in ["gta", "cs"]:
+            ds_subjects = [
+                subject[0] for subject in subject_ids if subject[1] == dataset
+            ]
+            ds_dir = os.path.join(
+                base_dir,
+                "OriginalData" if dataset == "gta" else "CityScapesOriginalData",
+                "preprocessed",
+            )
+            self.samples.extend(
+                get_data_samples(
+                    base_dir=ds_dir, pattern=file_pattern, subject_ids=ds_subjects
+                )
+            )
 
         # save all paths in lists
         self.imgs = [sample["image_path"] for sample in self.samples]
