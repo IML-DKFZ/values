@@ -1,6 +1,7 @@
 _target_: uncertainty_modeling.data.gta_datamodule.GTADataModule
-num_classes: 25
+num_classes: 19
+ignore_index: 255
 data_fold_id: 0
 batch_size: 8
 num_workers: 8
-splits_path: "/home/kckahl/E130-Personal/Kahl/GTA/splits/firstCycle/splits.pkl"
+splits_path: "/nvme/GTA/splits/cityscapes/splits.pkl"

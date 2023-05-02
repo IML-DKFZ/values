@@ -74,7 +74,10 @@ def main(cfg_hydra: DictConfig):
     )
 
     dm = hydra.utils.instantiate(
-        config.datamodule, data_input_dir=config.data_input_dir, seed=config.seed
+        config.datamodule,
+        data_input_dir=config.data_input_dir,
+        seed=config.seed,
+        _recursive_=False,
     )
     dm.prepare_data()
     dm.setup("fit")

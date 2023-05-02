@@ -11,7 +11,7 @@ from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAu
 from batchgenerators.transforms.abstract_transforms import Compose, AbstractTransform
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
 
-import cityscapes_labels as cs_labels
+import uncertainty_modeling.data.cityscapes_labels as cs_labels
 
 
 class GTADataModule(pl.LightningDataModule):
@@ -25,6 +25,7 @@ class GTADataModule(pl.LightningDataModule):
         num_workers: int = 8,
         seed: int = 42,
         splits_path: str = None,
+        ignore_index: int = 255,
         *args,
         **kwargs
     ):
@@ -33,6 +34,8 @@ class GTADataModule(pl.LightningDataModule):
             "DATASET_LOCATION",
             data_input_dir if data_input_dir is not None else os.getcwd(),
         )
+        self.ignore_index = ignore_index
+        self.num_classes = num_classes
         self.data_fold_id = data_fold_id
         self.batch_size = batch_size
         self.patch_size = patch_size
@@ -50,7 +53,7 @@ class GTADataModule(pl.LightningDataModule):
 
     @property
     def num_classes(self) -> int:
-        return 25
+        return self.num_classes
 
     def setup(self, stage: Optional[str] = None) -> None:
         """Load the keys for training, validation and testing
@@ -59,9 +62,10 @@ class GTADataModule(pl.LightningDataModule):
         """
         with open(self.splits_path, "rb") as f:
             splits = pickle.load(f)
-        self.tr_keys = splits[self.data_fold_id]["train"]
-        self.val_keys = splits[self.data_fold_id]["val"]
-        self.test_keys = splits[self.data_fold_id]["test"]
+        self.tr_keys = splits[self.data_fold_id]["train"][:500]
+        self.val_keys = splits[self.data_fold_id]["val"][:100]
+        self.id_test_keys = splits[self.data_fold_id]["id_test"]
+        self.ood_test_keys = splits[self.data_fold_id]["ood_test"]
 
     def train_dataloader(self):
         """Dataloader for training. Loads numpy data and defines transformations
@@ -70,13 +74,14 @@ class GTADataModule(pl.LightningDataModule):
             [FixedLengthAugmenter]: Multithreaded train dataloader with augmentations
         """
         train_loader = NumpyDataLoader(
-            base_dir=os.path.join(self.data_input_dir, "preprocessed"),
+            base_dir=self.data_input_dir,
             batch_size=self.batch_size,
             file_pattern="*.npy",
             subject_ids=self.tr_keys,
         )
 
-        transforms = [StochasticLabelSwitches(), NumpyToTensor(cast_to="float")]
+        # transforms = [StochasticLabelSwitches(), NumpyToTensor(cast_to="float")]
+        transforms = [NumpyToTensor(cast_to="float")]
         train_augmenter = FixedLengthAugmenter(
             data_loader=train_loader,
             transform=Compose(transforms),
@@ -96,14 +101,15 @@ class GTADataModule(pl.LightningDataModule):
             [FixedLengthAugmenter]: Multithreaded validation dataloader with augmentations
         """
         val_loader = NumpyDataLoader(
-            base_dir=os.path.join(self.data_input_dir, "preprocessed"),
-            batch_size=1,
+            base_dir=self.data_input_dir,
+            batch_size=self.batch_size,
             file_pattern="*.npy",
             subject_ids=self.val_keys,
             training=False,
         )
 
-        transforms = [StochasticLabelSwitches(), NumpyToTensor(cast_to="float")]
+        # transforms = [StochasticLabelSwitches(), NumpyToTensor(cast_to="float")]
+        transforms = [NumpyToTensor(cast_to="float")]
         val_augmenter = FixedLengthAugmenter(
             data_loader=val_loader,
             transform=Compose(transforms),
@@ -115,6 +121,10 @@ class GTADataModule(pl.LightningDataModule):
             wait_time=0.02,
         )
         return val_augmenter
+
+    @num_classes.setter
+    def num_classes(self, value):
+        self._num_classes = value
 
 
 class NumpyDataLoader(DataLoader):
@@ -146,6 +156,7 @@ class NumpyDataLoader(DataLoader):
             ds_dir = os.path.join(
                 base_dir,
                 "OriginalData" if dataset == "gta" else "CityScapesOriginalData",
+                "preprocessed",
             )
             self.samples.extend(
                 get_data_samples(
@@ -214,7 +225,7 @@ class NumpyDataLoader(DataLoader):
             # Add channel to image dimension
             # image_array = np.expand_dims(image_array, axis=0)
             image_paths.append(sample["image_path"])
-            if sample["label_paths"] is not None:
+            if sample["label_path"] is not None:
                 label_array = np.load(sample["label_path"], mmap_mode="r")
                 # Add channel to image dimension
                 label_array = np.expand_dims(label_array, axis=0)
@@ -311,7 +322,7 @@ def get_data_samples(
             samples.append(
                 {
                     "image_path": image_path,
-                    "label_paths": label_path,
+                    "label_path": label_path,
                 }
             )
 

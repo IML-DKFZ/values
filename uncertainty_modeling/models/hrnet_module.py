@@ -1,28 +1,38 @@
-# ------------------------------------------------------------------------------
-# Copyright (c) Microsoft
-# Licensed under the MIT License.
-# Written by Ke Sun (sunk@mail.ustc.edu.cn)
-# ------------------------------------------------------------------------------
+"""
+------------------------------------------------------------------------------
+Code slightly adapted and mainly from:
+https://github.com/HRNet/HRNet-Semantic-Segmentation/blob/HRNet-OCR/lib/models/seg_hrnet.py
+        ------------------------------------------------------------------------------
+        Copyright (c) Microsoft
+        Licensed under the MIT License.
+        Written by Ke Sun (sunk@mail.ustc.edu.cn), Jingyi Xie (hsfzxjy@gmail.com)
+        ------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+"""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import os
-import functools
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch._utils
 import torch.nn.functional as F
 
-BN_MOMENTUM = 0.1
-ALIGN_CORNERS = None
+# import logging
+# log=logging.getLogger(__name__)
+# from src.utils import get_logger
+#
+# log = get_logger(__name__)
 
 BatchNorm2d = BatchNorm2d_class = nn.BatchNorm2d
+
 relu_inplace = True
+BN_MOMENTUM = 0.1
+ALIGN_CORNERS = None
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -141,21 +151,21 @@ class HighResolutionModule(nn.Module):
             error_msg = "NUM_BRANCHES({}) <> NUM_BLOCKS({})".format(
                 num_branches, len(num_blocks)
             )
-            print(error_msg)
+
             raise ValueError(error_msg)
 
         if num_branches != len(num_channels):
             error_msg = "NUM_BRANCHES({}) <> NUM_CHANNELS({})".format(
                 num_branches, len(num_channels)
             )
-            print(error_msg)
+
             raise ValueError(error_msg)
 
         if num_branches != len(num_inchannels):
             error_msg = "NUM_BRANCHES({}) <> NUM_INCHANNELS({})".format(
                 num_branches, len(num_inchannels)
             )
-            print(error_msg)
+
             raise ValueError(error_msg)
 
     def _make_one_branch(self, branch_index, block, num_blocks, num_channels, stride=1):
@@ -315,7 +325,14 @@ class HighResolutionNet(nn.Module):
         ALIGN_CORNERS = config.MODEL.ALIGN_CORNERS
 
         # stem net
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=2, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            config.MODEL.INPUT_CHANNELS,
+            64,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            bias=False,
+        )
         self.bn1 = BatchNorm2d(64, momentum=BN_MOMENTUM)
         self.conv2 = nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)
         self.bn2 = BatchNorm2d(64, momentum=BN_MOMENTUM)
@@ -363,7 +380,7 @@ class HighResolutionNet(nn.Module):
             self.stage4_cfg, num_channels, multi_scale_output=True
         )
 
-        last_inp_channels = np.int(np.sum(pre_stage_channels))
+        last_inp_channels = int(np.sum(pre_stage_channels))
 
         self.last_layer = nn.Sequential(
             nn.Conv2d(
@@ -483,6 +500,8 @@ class HighResolutionNet(nn.Module):
         return nn.Sequential(*modules), num_inchannels
 
     def forward(self, x):
+        x_size = x.size(2), x.size(3)
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -537,12 +556,11 @@ class HighResolutionNet(nn.Module):
 
         x = self.last_layer(x)
 
+        x = F.interpolate(x, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS)
+
         return x
 
-    def init_weights(
-        self,
-        pretrained="",
-    ):
+    def init_weights(self):
         print("=> init weights from normal distribution")
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -550,21 +568,70 @@ class HighResolutionNet(nn.Module):
             elif isinstance(m, BatchNorm2d_class):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+
+    def load_weights(self, pretrained):
         if os.path.isfile(pretrained):
-            pretrained_dict = torch.load(pretrained)
-            print("=> loading pretrained model {}".format(pretrained))
+            pretrained_dict = torch.load(pretrained, map_location={"cuda:0": "cpu"})
+            print("Loading pretrained weights {}".format(pretrained))
+
+            # some preprocessing
+            if "state_dict" in pretrained_dict.keys():
+                pretrained_dict = pretrained_dict["state_dict"]
+            pretrained_dict = {
+                k.replace("model.", "")
+                .replace("module.", "")
+                .replace("backbone.", ""): v
+                for k, v in pretrained_dict.items()
+            }
+
             model_dict = self.state_dict()
+
+            # find weights which match to the model
             pretrained_dict = {
                 k: v for k, v in pretrained_dict.items() if k in model_dict.keys()
             }
-            for k, _ in pretrained_dict.items():
-                print("=> loading {} pretrained model {}".format(k, pretrained))
+            no_match = set(model_dict) - set(pretrained_dict)
+
+            # check if shape of pretrained weights match to the model
+            pretrained_dict = {
+                k: v
+                for k, v in pretrained_dict.items()
+                if v.shape == model_dict[k].shape
+            }
+            shape_mismatch = (set(model_dict) - set(pretrained_dict)) - no_match
+
+            # log info about weights which are not found and weights which have a shape mismatch
+            if len(no_match):
+                num = len(no_match)
+                if num >= 5:
+                    no_match = list(no_match)[:5]
+                    no_match.append("...")
+                print(
+                    "No pretrained Weights found for {} layers: {}".format(
+                        num, no_match
+                    )
+                )
+            if len(shape_mismatch):
+                num = len(shape_mismatch)
+                if num >= 5:
+                    shape_mismatch = list(shape_mismatch)[:5]
+                    shape_mismatch.append("...")
+                print("Shape Mismatch for {} layers: {}".format(num, shape_mismatch))
+
+            # load weights
             model_dict.update(pretrained_dict)
             self.load_state_dict(model_dict)
+            del model_dict, pretrained_dict
+            print("Weights successfully loaded")
+        else:
+            raise NotImplementedError(
+                "No Pretrained Weights found for {}".format_map(pretrained)
+            )
 
 
 def get_seg_model(cfg, **kwargs):
-    model = HighResolutionNet(cfg, **kwargs)
-    model.init_weights(cfg.MODEL.PRETRAINED)
+    model = HighResolutionNet(cfg)
+    if cfg.MODEL.PRETRAINED:
+        model.load_weights(cfg.MODEL.PRETRAINED_WEIGHTS)
 
     return model

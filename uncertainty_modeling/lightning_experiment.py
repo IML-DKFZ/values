@@ -12,12 +12,16 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.distributions as td
 import pytorch_lightning as pl
+
+import torchvision
 from omegaconf import DictConfig, OmegaConf
 from torchmetrics.functional.classification import dice
 
 import uncertainty_modeling.models.ssn_unet3D_module
 from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
+
+import uncertainty_modeling.data.cityscapes_labels as cs_labels
 
 
 class LightningExperiment(pl.LightningModule):
@@ -50,6 +54,11 @@ class LightningExperiment(pl.LightningModule):
         self.save_hyperparameters(OmegaConf.to_container(hparams))
         self.nested_hparam_dict = nested_hparam_dict
 
+        if "ignore_index" in hparams.datamodule:
+            self.ignore_index = hparams.datamodule.ignore_index
+        else:
+            self.ignore_index = 0
+
         if aleatoric_loss is not None:
             self.model = hydra.utils.instantiate(
                 hparams.model, aleatoric_loss=aleatoric_loss
@@ -66,9 +75,30 @@ class LightningExperiment(pl.LightningModule):
         self.ce_loss = torch.nn.CrossEntropyLoss()
         self.nll_loss = torch.nn.NLLLoss()
 
-        self.val_loss_avg = 0.0
-        self.val_avg_acc = 0.0
         self.test_datacarrier = DataCarrier3D()
+
+    # def configure_optimizers(self) -> Tuple[List[optim.Adam], List[dict]]:
+    #     """Define the optimizers and learning rate schedulers. Adam is used as optimizer.
+    #
+    #     Returns:
+    #         optimizer [List[optim.Adam]]: The optimizer which is used in training (Adam)
+    #         scheduler [dict]: The learning rate scheduler
+    #     """
+    #     optimizer = optim.Adam(
+    #         self.parameters(),
+    #         lr=self.learning_rate,
+    #         weight_decay=self.weight_decay,
+    #     )
+    #     # scheduler dictionary which defines scheduler and how it is used in the training loop
+    #     scheduler = {
+    #         "scheduler": lr_scheduler.ReduceLROnPlateau(
+    #             optimizer=optimizer, patience=10
+    #         ),
+    #         "monitor": "validation/val_loss",
+    #         "interval": "epoch",
+    #         "frequency": 1,
+    #     }
+    #     return [optimizer], [scheduler]
 
     def configure_optimizers(self) -> Tuple[List[optim.Adam], List[dict]]:
         """Define the optimizers and learning rate schedulers. Adam is used as optimizer.
@@ -77,18 +107,20 @@ class LightningExperiment(pl.LightningModule):
             optimizer [List[optim.Adam]]: The optimizer which is used in training (Adam)
             scheduler [dict]: The learning rate scheduler
         """
-        optimizer = optim.Adam(
+        optimizer = optim.SGD(
             self.parameters(),
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
+            momentum=0.9,
         )
         # scheduler dictionary which defines scheduler and how it is used in the training loop
+        max_steps = self.trainer.datamodule.max_steps()
         scheduler = {
-            "scheduler": lr_scheduler.ReduceLROnPlateau(
-                optimizer=optimizer, patience=10
+            "scheduler": lr_scheduler.PolynomialLR(
+                optimizer=optimizer, power=0.9, total_iters=max_steps
             ),
             "monitor": "validation/val_loss",
-            "interval": "epoch",
+            "interval": "step",
             "frequency": 1,
         }
         return [optimizer], [scheduler]
@@ -152,9 +184,11 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze()
-        # TODO: why is this done here? This function probably needs adaption for 2D
-        if len(target.shape) == 3:
-            target = target.unsqueeze(0)
+        # TODO: This function probably needs adaption for 2D
+        # only squeeze channel dimension
+        target = batch["seg"].long().squeeze(1)
+        # if len(target.shape) == 3:
+        #     target = target.unsqueeze(0)
         # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
@@ -213,8 +247,23 @@ class LightningExperiment(pl.LightningModule):
         else:
             output = self.forward(batch["data"])
             output_softmax = F.softmax(output, dim=1)
+            # output_labels = torch.argmax(output_softmax, dim=1)
 
-            loss = self.dice_loss(output_softmax, target) + self.ce_loss(output, target)
+            if self.ignore_index != 0:
+                # loss = self.dice_loss(
+                #     output_softmax,
+                #     target,
+                #     ignore_index=self.ignore_index,
+                #     num_classes=output.shape[1],
+                # ) + F.cross_entropy(output, target_ignore, ignore_index=-1)
+                # loss = -dice(
+                #     output_labels, target, ignore_index=self.ignore_index
+                # ) + F.cross_entropy(output, target, ignore_index=self.ignore_index)
+                loss = F.cross_entropy(output, target, ignore_index=self.ignore_index)
+            else:
+                loss = self.dice_loss(output_softmax, target) + self.ce_loss(
+                    output, target
+                )
         self.log(
             "training/train_loss",
             loss,
@@ -238,9 +287,10 @@ class LightningExperiment(pl.LightningModule):
             val_loss [torch.Tensor]: The computed loss
         """
         # TODO: This function probably needs adaption for 2D
-        target = batch["seg"].long().squeeze()
-        if len(target.size()) == 3:
-            target = target.unsqueeze(0)
+        # only squeeze channel dimension
+        target = batch["seg"].long().squeeze(1)
+        # if len(target.size()) == 3:
+        #     target = target.unsqueeze(0)
         # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
@@ -259,7 +309,7 @@ class LightningExperiment(pl.LightningModule):
             )
             val_dice = torch.zeros([self.n_aleatoric_samples])
             for idx, sample in enumerate(samples):
-                val_dice[idx] = dice(sample, target, ignore_index=0)
+                val_dice[idx] = dice(sample, target, ignore_index=self.ignore_index)
             val_dice = torch.mean(val_dice)
 
             target = target.unsqueeze(1)
@@ -293,28 +343,66 @@ class LightningExperiment(pl.LightningModule):
             val_loss = self.dice_loss(
                 torch.exp(log_sample_avg), target
             ) + self.nll_loss(log_sample_avg, target)
-            val_dice = dice(torch.exp(log_sample_avg), target, ignore_index=0)
+            val_dice = dice(
+                torch.exp(log_sample_avg), target, ignore_index=self.ignore_index
+            )
         else:
             output = self.forward(batch["data"].float())
             output_softmax = F.softmax(output, dim=1)
-            val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
-                output, target
-            )
-            val_dice = dice(output_softmax, target, ignore_index=0)
+            output_labels = torch.argmax(output_softmax, dim=1)
+            if self.ignore_index != 0:
+                val_loss = F.cross_entropy(
+                    output, target, ignore_index=self.ignore_index
+                )
+            else:
+                val_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
+                    output, target
+                )
+
+            val_dice = dice(output_labels, target, ignore_index=self.ignore_index)
 
         # Visualization of Segmentations
         # TODO: Visualization for 3D?
-        # if batch_idx == 1:
-        #     self.predicted_segmentation_val = torch.argmax(output, dim=1, keepdim=True)
-        #     self.target_segmentation_val = batch["seg"].long()
-        #     grid = torchvision.utils.make_grid(self.predicted_segmentation_val)
-        #     self.logger.experiment.add_image(
-        #         "validation/Val_Predicted_Segmentations", grid, self.current_epoch
-        #     )
-        #     grid = torchvision.utils.make_grid(self.target_segmentation_val)
-        #     self.logger.experiment.add_image(
-        #         "validation/Val_Target_Segmentations", grid, self.current_epoch
-        #     )
+        if batch_idx == 1:
+            predicted_segmentation_val = torch.argmax(output, dim=1, keepdim=True)
+            predicted_segmentation_val = torch.squeeze(predicted_segmentation_val, 1)
+            target_segmentation_val = batch["seg"].long()
+            target_segmentation_val = torch.squeeze(target_segmentation_val, 1)
+            # transform the labels to color map for visualization
+            predicted_segmentation_val_color = torch.zeros(
+                (*predicted_segmentation_val.shape, 3), dtype=torch.long
+            )
+            target_segmentation_val_color = torch.zeros(
+                (*target_segmentation_val.shape, 3), dtype=torch.long
+            )
+            for k, v in cs_labels.trainId2color.items():
+                predicted_segmentation_val_color[
+                    predicted_segmentation_val == k
+                ] = torch.tensor(v)
+                target_segmentation_val_color[
+                    target_segmentation_val == k
+                ] = torch.tensor(v)
+            predicted_segmentation_val_color = torch.swapaxes(
+                predicted_segmentation_val_color, 1, 3
+            )
+            target_segmentation_val_color = torch.swapaxes(
+                target_segmentation_val_color, 1, 3
+            )
+            predicted_segmentation_val_color = torch.swapaxes(
+                predicted_segmentation_val_color, 2, 3
+            )
+            target_segmentation_val_color = torch.swapaxes(
+                target_segmentation_val_color, 2, 3
+            )
+
+            grid = torchvision.utils.make_grid(predicted_segmentation_val_color)
+            self.logger.experiment.add_image(
+                "validation/Val_Predicted_Segmentations", grid, self.current_epoch
+            )
+            grid = torchvision.utils.make_grid(target_segmentation_val_color)
+            self.logger.experiment.add_image(
+                "validation/Val_Target_Segmentations", grid, self.current_epoch
+            )
 
         log = {"validation/val_loss": val_loss, "validation/val_dice": val_dice}
         self.log_dict(log, prog_bar=False, on_step=False, on_epoch=True, logger=True)
@@ -340,7 +428,7 @@ class LightningExperiment(pl.LightningModule):
         test_loss = self.dice_loss(output_softmax, target) + self.ce_loss(
             output, target
         )
-        test_dice = dice(output_softmax, target, ignore_index=0)
+        test_dice = dice(output_softmax, target, ignore_index=self.ignore_index)
         self.test_datacarrier.concat_data(batch=batch, softmax_pred=output_softmax)
 
         log = {"test/test_loss": test_loss, "test/test_dice": test_dice}
