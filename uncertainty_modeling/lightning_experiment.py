@@ -77,28 +77,14 @@ class LightningExperiment(pl.LightningModule):
 
         self.test_datacarrier = DataCarrier3D()
 
-    # def configure_optimizers(self) -> Tuple[List[optim.Adam], List[dict]]:
-    #     """Define the optimizers and learning rate schedulers. Adam is used as optimizer.
-    #
-    #     Returns:
-    #         optimizer [List[optim.Adam]]: The optimizer which is used in training (Adam)
-    #         scheduler [dict]: The learning rate scheduler
-    #     """
-    #     optimizer = optim.Adam(
-    #         self.parameters(),
-    #         lr=self.learning_rate,
-    #         weight_decay=self.weight_decay,
-    #     )
-    #     # scheduler dictionary which defines scheduler and how it is used in the training loop
-    #     scheduler = {
-    #         "scheduler": lr_scheduler.ReduceLROnPlateau(
-    #             optimizer=optimizer, patience=10
-    #         ),
-    #         "monitor": "validation/val_loss",
-    #         "interval": "epoch",
-    #         "frequency": 1,
-    #     }
-    #     return [optimizer], [scheduler]
+        if "optimizer" in hparams:
+            self.optimizer_conf = hparams.optimizer
+        else:
+            self.optimizer_conf = None
+        if "lr_scheduler" in hparams:
+            self.lr_scheduler_conf = hparams.lr_scheduler
+        else:
+            self.lr_scheduler_conf = None
 
     def configure_optimizers(self) -> Tuple[List[optim.Adam], List[dict]]:
         """Define the optimizers and learning rate schedulers. Adam is used as optimizer.
@@ -107,22 +93,34 @@ class LightningExperiment(pl.LightningModule):
             optimizer [List[optim.Adam]]: The optimizer which is used in training (Adam)
             scheduler [dict]: The learning rate scheduler
         """
-        optimizer = optim.SGD(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay,
-            momentum=0.9,
-        )
+        if self.optimizer_conf:
+            optimizer = hydra.utils.instantiate(self.optimizer_conf, self.parameters())
+        else:
+            optimizer = optim.Adam(
+                self.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+            )
         # scheduler dictionary which defines scheduler and how it is used in the training loop
-        max_steps = self.trainer.datamodule.max_steps()
-        scheduler = {
-            "scheduler": lr_scheduler.PolynomialLR(
-                optimizer=optimizer, power=0.9, total_iters=max_steps
-            ),
-            "monitor": "validation/val_loss",
-            "interval": "step",
-            "frequency": 1,
-        }
+        if self.lr_scheduler_conf:
+            max_steps = self.trainer.datamodule.max_steps()
+            scheduler = {
+                "scheduler": hydra.utils.instantiate(
+                    self.lr_scheduler_conf, optimizer=optimizer, total_iters=max_steps
+                ),
+                "monitor": "validation/val_loss",
+                "interval": "step",
+                "frequency": 1,
+            }
+        else:
+            scheduler = {
+                "scheduler": lr_scheduler.ReduceLROnPlateau(
+                    optimizer=optimizer, patience=10
+                ),
+                "monitor": "validation/val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+            }
         return [optimizer], [scheduler]
 
     def on_fit_start(self):
