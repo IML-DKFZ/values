@@ -9,7 +9,10 @@ import cv2
 
 # cityscapes dataset class
 class Cityscapes_dataset(torch.utils.data.Dataset):
-    def __init__(self, data_input_dir: str, split="train", transforms=None):
+    def __init__(
+        self, splits_path: str, data_input_dir: str, split="train", transforms=None
+    ):
+        self.splits_path = splits_path
         self.get_split_keys()
         if split == "train":
             subject_ids = self.tr_keys
@@ -63,7 +66,7 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         Args:
             stage: The current stage of training
         """
-        with open("/nvme/GTA/splits/cityscapes/splits.pkl", "rb") as f:
+        with open(self.splits_path, "rb") as f:
             splits = pickle.load(f)
         self.data_fold_id = 0
         self.tr_keys = splits[self.data_fold_id]["train"]

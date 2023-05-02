@@ -7,3 +7,4 @@ val_batch_size: 6
 data_fold_id: 0
 dataset:
   _target_: uncertainty_modeling.data.cityscapes_dataset.Cityscapes_dataset
+  splits_path: "/nvme/GTA/splits/cityscapes/splits.pkl"
