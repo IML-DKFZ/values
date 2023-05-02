@@ -181,13 +181,7 @@ class LightningExperiment(pl.LightningModule):
         Returns:
             loss [torch.Tensor]: The computed loss
         """
-        target = batch["seg"].long().squeeze()
-        # TODO: This function probably needs adaption for 2D
-        # only squeeze channel dimension
         target = batch["seg"].long().squeeze(1)
-        # if len(target.shape) == 3:
-        #     target = target.unsqueeze(0)
-        # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
@@ -245,18 +239,8 @@ class LightningExperiment(pl.LightningModule):
         else:
             output = self.forward(batch["data"])
             output_softmax = F.softmax(output, dim=1)
-            # output_labels = torch.argmax(output_softmax, dim=1)
 
             if self.ignore_index != 0:
-                # loss = self.dice_loss(
-                #     output_softmax,
-                #     target,
-                #     ignore_index=self.ignore_index,
-                #     num_classes=output.shape[1],
-                # ) + F.cross_entropy(output, target_ignore, ignore_index=-1)
-                # loss = -dice(
-                #     output_labels, target, ignore_index=self.ignore_index
-                # ) + F.cross_entropy(output, target, ignore_index=self.ignore_index)
                 loss = F.cross_entropy(output, target, ignore_index=self.ignore_index)
             else:
                 loss = self.dice_loss(output_softmax, target) + self.ce_loss(
@@ -284,12 +268,7 @@ class LightningExperiment(pl.LightningModule):
         Returns:
             val_loss [torch.Tensor]: The computed loss
         """
-        # TODO: This function probably needs adaption for 2D
-        # only squeeze channel dimension
         target = batch["seg"].long().squeeze(1)
-        # if len(target.size()) == 3:
-        #     target = target.unsqueeze(0)
-        # TODO: check SSNs and aleatoric loss later, for now only consider simple softmax
         if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
             if self.current_epoch < self.pretrain_epochs:
                 mean = self.forward(batch["data"], mean_only=True)
@@ -360,8 +339,7 @@ class LightningExperiment(pl.LightningModule):
             val_dice = dice(output_labels, target, ignore_index=self.ignore_index)
 
         # Visualization of Segmentations
-        # TODO: Visualization for 3D?
-        if batch_idx == 1:
+        if batch_idx == 1 and len(batch["seg"].shape) == 3:
             predicted_segmentation_val = torch.argmax(output, dim=1, keepdim=True)
             predicted_segmentation_val = torch.squeeze(predicted_segmentation_val, 1)
             target_segmentation_val = batch["seg"].long()
