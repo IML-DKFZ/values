@@ -1,5 +1,5 @@
 _target_: uncertainty_modeling.data.torch_dataloader.BaseDataModule   # Base Data Module
-num_classes: 19
+num_classes: 24
 ignore_index: 255
 num_workers: 10      # Parsing all needed experiment
 batch_size: 6

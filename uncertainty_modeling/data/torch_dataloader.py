@@ -28,31 +28,22 @@ class StochasticLabelSwitches(A.BasicTransform):
         super(StochasticLabelSwitches, self).__init__(always_apply, p)
         self._name2id = cs_labels.name2trainId
         self._label_switches = {
-            "sidewalk": 1.0 / 2.0,
-            "person": 1.0 / 2.0,
-            "car": 1.0 / 2.0,
-            "vegetation": 1.0 / 2.0,
-            "road": 1.0 / 2.0,
+            "sidewalk": 1.0 / 3.0,
+            "person": 1.0 / 3.0,
+            "car": 1.0 / 3.0,
+            "vegetation": 1.0 / 3.0,
+            "road": 1.0 / 3.0,
         }
 
     def apply(self, img, **params):
         return img
 
     def apply_to_mask(self, mask, **params):
-        # if len(mask.shape) == 2:
-        #     batch_size = 1
-        # else:
-        #     batch_size = mask.shape[0]
-
         for c, p in self._label_switches.items():
             init_id = self._name2id[c]
             final_id = self._name2id[c + "_2"]
-            # switch_instances = np.random.binomial(1, p, batch_size)
             switch_instances = np.random.binomial(1, p, 1)
 
-            # for i in range(batch_size):
-            #     if switch_instances[i]:
-            #         mask[i][mask[i] == init_id] = final_id
             if switch_instances[0]:
                 mask[mask == init_id] = final_id
         return mask
@@ -134,7 +125,7 @@ def get_augmentations() -> list:
         A.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
         ),
-        # StochasticLabelSwitches(always_apply=True, p=1.0),
+        StochasticLabelSwitches(always_apply=True, p=1.0),
         ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
     ]
     return A.Compose(transforms)
