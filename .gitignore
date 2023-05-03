@@ -133,3 +133,6 @@ dmypy.json
 
 # hydra
 outputs/
+
+# pretrained weights
+*.pth
