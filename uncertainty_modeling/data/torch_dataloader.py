@@ -1,6 +1,3 @@
-from abc import ABC
-from typing import Tuple, Dict, Any
-
 import hydra
 from omegaconf import DictConfig
 import numpy as np
@@ -15,49 +12,12 @@ import cv2
 import torch
 import random
 
-import uncertainty_modeling.data.cityscapes_labels as cs_labels
 import uncertainty_modeling.augmentations as custom_augmentations
 
 # set number of Threads to 0 for opencv and albumentations
 cv2.setNumThreads(0)
 # import logger
 # log = get_logger(__name__)
-
-
-# class StochasticLabelSwitches(A.BasicTransform):
-#     def __init__(self, always_apply=False, p=0.5):
-#         super(StochasticLabelSwitches, self).__init__(always_apply, p)
-#         self._name2id = cs_labels.name2trainId
-#         self._label_switches = {
-#             "sidewalk": 1.0 / 3.0,
-#             "person": 1.0 / 3.0,
-#             "car": 1.0 / 3.0,
-#             "vegetation": 1.0 / 3.0,
-#             "road": 1.0 / 3.0,
-#         }
-#
-#     def apply(self, img, **params):
-#         return img
-#
-#     def apply_to_mask(self, mask, **params):
-#         for c, p in self._label_switches.items():
-#             init_id = self._name2id[c]
-#             final_id = self._name2id[c + "_2"]
-#             switch_instances = np.random.binomial(1, p, 1)
-#
-#             if switch_instances[0]:
-#                 mask[mask == init_id] = final_id
-#         return mask
-#
-#     def get_params_dependent_on_targets(self, params: Dict[str, Any]) -> Dict[str, Any]:
-#         return {}
-#
-#     def get_transform_init_args_names(self):
-#         return ()
-#
-#     @property
-#     def targets(self):
-#         return {"mask": self.apply_to_mask}
 
 
 def seed_worker(worker_id):
@@ -154,44 +114,6 @@ def get_augmentations_from_config(augmentations: DictConfig) -> list:
             else:
                 print("No Operation Found: %s", transform)
     return trans
-
-
-# def get_train_augmentations():
-#     transforms = [
-#         A.RandomScale(
-#             always_apply=False, p=1.0, interpolation=1, scale_limit=(-0.5, 1.0)
-#         ),
-#         A.HorizontalFlip(always_apply=False, p=0.5),
-#         A.Normalize(
-#             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
-#         ),
-#         StochasticLabelSwitches(always_apply=True, p=1.0),
-#         ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
-#     ]
-#     return A.Compose(transforms)
-#
-#
-# def get_val_test_augmentations() -> list:
-#     """
-#     Build an Albumentations augmentation pipeline for validation / test images
-#     Parameters
-#     ----------
-#     augmentations : DictConfig
-#         config of the Augmentation
-#
-#     Returns
-#     -------
-#     list :
-#         list of Albumentations transforms
-#     """
-#     transforms = [
-#         A.Normalize(
-#             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
-#         ),
-#         StochasticLabelSwitches(always_apply=True, p=1.0),
-#         ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
-#     ]
-#     return A.Compose(transforms)
 
 
 class BaseDataModule(LightningDataModule):
