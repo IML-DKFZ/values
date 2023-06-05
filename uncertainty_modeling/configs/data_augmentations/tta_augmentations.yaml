@@ -1,0 +1,50 @@
+#@package _global_
+AUGMENTATIONS:
+  rotation_limit: 22.5
+  # scaling limit is offset by 1 in albumentations -> scaling between 0.8 and 1.2 here
+  scale_limit: [ -0.2, 0.2 ]
+  width: 478
+  height: 256
+  mean: [ 0.485, 0.456, 0.406 ]
+  std: [ 0.229, 0.224, 0.225 ]
+  border_mode: 0
+  mask_value: 255
+  TRAIN:
+    - Compose:
+        transforms:
+          - HorizontalFlip:
+              p: 0.5
+          - Rotate:
+              limit: ${AUGMENTATIONS.rotation_limit}
+              border_mode: ${AUGMENTATIONS.border_mode}
+              mask_value: ${AUGMENTATIONS.mask_value}
+          - RandomScale:
+              scale_limit: ${AUGMENTATIONS.scale_limit}
+              p: 1.0
+          - PadIfNeeded:
+              min_height: ${AUGMENTATIONS.height}
+              min_width: ${AUGMENTATIONS.width}
+              border_mode: ${AUGMENTATIONS.border_mode}
+              mask_value: ${AUGMENTATIONS.mask_value}
+          - RandomCrop:
+              height: ${AUGMENTATIONS.height}
+              width: ${AUGMENTATIONS.width}
+          - GaussNoise:
+          - Normalize:
+              mean: ${AUGMENTATIONS.mean}
+              std: ${AUGMENTATIONS.std}
+          - StochasticLabelSwitches:
+              always_apply: True
+              p: 1.0
+          - ToTensorV2:
+  VALIDATION:
+    - Compose:
+        transforms:
+          - Normalize:
+              mean: ${AUGMENTATIONS.mean}
+              std: ${AUGMENTATIONS.std}
+          - StochasticLabelSwitches:
+              always_apply: True
+              p: 1.0
+          - ToTensorV2:
+  TEST: ${AUGMENTATIONS.VALIDATION}

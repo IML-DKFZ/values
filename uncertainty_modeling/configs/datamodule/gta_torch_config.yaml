@@ -5,6 +5,7 @@ num_workers: 10      # Parsing all needed experiment
 batch_size: 6
 val_batch_size: 6
 data_fold_id: 0
+augmentations: ${AUGMENTATIONS}
 dataset:
   _target_: uncertainty_modeling.data.cityscapes_dataset.Cityscapes_dataset
   splits_path: "/nvme/GTA/splits/firstCycle/splits.pkl"

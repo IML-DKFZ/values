@@ -4,6 +4,7 @@ from typing import Optional, Tuple, List
 from argparse import Namespace, ArgumentParser
 
 import hydra
+import numpy as np
 import yaml
 
 import torch
@@ -22,6 +23,7 @@ from loss_modules import SoftDiceLoss
 from data_carrier_3D import DataCarrier3D
 
 import uncertainty_modeling.data.cityscapes_labels as cs_labels
+import cv2
 
 
 class LightningExperiment(pl.LightningModule):
@@ -238,6 +240,22 @@ class LightningExperiment(pl.LightningModule):
             )
         else:
             output = self.forward(batch["data"])
+            # for i, image in enumerate(batch["data"]):
+            #     seg_color = self.get_seg_color(batch["seg"][i])
+            #     image = torch.swapaxes(image, 1, 2)
+            #     image = torch.swapaxes(image, 0, 2)
+            #     image = image.detach().long().cpu().numpy().astype(np.uint8)
+            #     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            #     # seg_color = torch.swapaxes(seg_color, 0, 1)
+            #     seg_color = seg_color.detach().long().cpu().numpy().astype(np.uint8)
+            #     print(seg_color.shape)
+            #     cv2.imwrite(
+            #         f"/home/kckahl/test_cityscapes_aug/{batch_idx}_{i}.png", image
+            #     )
+            #     cv2.imwrite(
+            #         f"/home/kckahl/test_cityscapes_aug/{batch_idx}_{i}_seg.png",
+            #         seg_color,
+            #     )
             output_softmax = F.softmax(output, dim=1)
 
             if self.ignore_index != 0:
@@ -256,6 +274,26 @@ class LightningExperiment(pl.LightningModule):
             batch_size=self.hparams.batch_size,
         )
         return loss
+
+    def get_seg_color(self, seg):
+        target_segmentation_val = seg.long()
+        target_segmentation_val = torch.squeeze(target_segmentation_val, 1)
+        # transform the labels to color map for visualization
+        target_segmentation_val_color = torch.zeros(
+            (*target_segmentation_val.shape, 3), dtype=torch.long
+        )
+        for k, v in cs_labels.trainId2color.items():
+            target_segmentation_val_color[target_segmentation_val == k] = torch.tensor(
+                v
+            )
+        return target_segmentation_val_color
+        # target_segmentation_val_color = torch.swapaxes(
+        #     target_segmentation_val_color, 1, 3
+        # )
+        #
+        # target_segmentation_val_color = torch.swapaxes(
+        #     target_segmentation_val_color, 2, 3
+        # )
 
     def validation_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Perform a validation step, i.e.pass a validation batch through the network, visualize the results in logging

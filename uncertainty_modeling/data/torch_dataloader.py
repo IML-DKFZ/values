@@ -16,6 +16,7 @@ import torch
 import random
 
 import uncertainty_modeling.data.cityscapes_labels as cs_labels
+import uncertainty_modeling.augmentations as custom_augmentations
 
 # set number of Threads to 0 for opencv and albumentations
 cv2.setNumThreads(0)
@@ -23,40 +24,40 @@ cv2.setNumThreads(0)
 # log = get_logger(__name__)
 
 
-class StochasticLabelSwitches(A.BasicTransform):
-    def __init__(self, always_apply=False, p=0.5):
-        super(StochasticLabelSwitches, self).__init__(always_apply, p)
-        self._name2id = cs_labels.name2trainId
-        self._label_switches = {
-            "sidewalk": 1.0 / 3.0,
-            "person": 1.0 / 3.0,
-            "car": 1.0 / 3.0,
-            "vegetation": 1.0 / 3.0,
-            "road": 1.0 / 3.0,
-        }
-
-    def apply(self, img, **params):
-        return img
-
-    def apply_to_mask(self, mask, **params):
-        for c, p in self._label_switches.items():
-            init_id = self._name2id[c]
-            final_id = self._name2id[c + "_2"]
-            switch_instances = np.random.binomial(1, p, 1)
-
-            if switch_instances[0]:
-                mask[mask == init_id] = final_id
-        return mask
-
-    def get_params_dependent_on_targets(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {}
-
-    def get_transform_init_args_names(self):
-        return ()
-
-    @property
-    def targets(self):
-        return {"mask": self.apply_to_mask}
+# class StochasticLabelSwitches(A.BasicTransform):
+#     def __init__(self, always_apply=False, p=0.5):
+#         super(StochasticLabelSwitches, self).__init__(always_apply, p)
+#         self._name2id = cs_labels.name2trainId
+#         self._label_switches = {
+#             "sidewalk": 1.0 / 3.0,
+#             "person": 1.0 / 3.0,
+#             "car": 1.0 / 3.0,
+#             "vegetation": 1.0 / 3.0,
+#             "road": 1.0 / 3.0,
+#         }
+#
+#     def apply(self, img, **params):
+#         return img
+#
+#     def apply_to_mask(self, mask, **params):
+#         for c, p in self._label_switches.items():
+#             init_id = self._name2id[c]
+#             final_id = self._name2id[c + "_2"]
+#             switch_instances = np.random.binomial(1, p, 1)
+#
+#             if switch_instances[0]:
+#                 mask[mask == init_id] = final_id
+#         return mask
+#
+#     def get_params_dependent_on_targets(self, params: Dict[str, Any]) -> Dict[str, Any]:
+#         return {}
+#
+#     def get_transform_init_args_names(self):
+#         return ()
+#
+#     @property
+#     def targets(self):
+#         return {"mask": self.apply_to_mask}
 
 
 def seed_worker(worker_id):
@@ -107,7 +108,7 @@ def get_max_steps(
     return max_steps, steps_per_epoch
 
 
-def get_augmentations() -> list:
+def get_augmentations_from_config(augmentations: DictConfig) -> list:
     """
     Build an Albumentations augmentation pipeline from the input config
 
@@ -121,14 +122,76 @@ def get_augmentations() -> list:
     list :
         list of Albumentations transforms
     """
-    transforms = [
-        A.Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
-        ),
-        StochasticLabelSwitches(always_apply=True, p=1.0),
-        ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
-    ]
-    return A.Compose(transforms)
+    # otherwise recursively build the transformations
+    trans = []
+    for augmentation in augmentations:
+        transforms = list(augmentation.keys())
+
+        for transform in transforms:
+            parameters = getattr(augmentation, transform)
+            if parameters is None:
+                parameters = {}
+
+            if hasattr(A, transform):
+                if "transforms" in list(parameters.keys()):
+                    # "transforms" indicates a transformation which takes a list of other transformations
+                    # as input ,e.g. A.Compose -> recursively build these transforms
+                    transforms = get_augmentations_from_config(parameters.transforms)
+                    del parameters["transforms"]
+                    func = getattr(A, transform)
+                    trans.append(func(transforms=transforms, **parameters))
+                else:
+                    # load transformation form Albumentations
+                    func = getattr(A, transform)
+                    trans.append(func(**parameters))
+            elif hasattr(A.pytorch, transform):
+                # ToTensorV2 transformation is located in A.pytorch
+                func = getattr(A.pytorch, transform)
+                trans.append(func(**parameters))
+            elif hasattr(custom_augmentations, transform):
+                func = getattr(custom_augmentations, transform)
+                trans.append(func(**parameters))
+            else:
+                print("No Operation Found: %s", transform)
+    return trans
+
+
+# def get_train_augmentations():
+#     transforms = [
+#         A.RandomScale(
+#             always_apply=False, p=1.0, interpolation=1, scale_limit=(-0.5, 1.0)
+#         ),
+#         A.HorizontalFlip(always_apply=False, p=0.5),
+#         A.Normalize(
+#             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
+#         ),
+#         StochasticLabelSwitches(always_apply=True, p=1.0),
+#         ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
+#     ]
+#     return A.Compose(transforms)
+#
+#
+# def get_val_test_augmentations() -> list:
+#     """
+#     Build an Albumentations augmentation pipeline for validation / test images
+#     Parameters
+#     ----------
+#     augmentations : DictConfig
+#         config of the Augmentation
+#
+#     Returns
+#     -------
+#     list :
+#         list of Albumentations transforms
+#     """
+#     transforms = [
+#         A.Normalize(
+#             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], always_apply=True
+#         ),
+#         StochasticLabelSwitches(always_apply=True, p=1.0),
+#         ToTensorV2(always_apply=True, p=1.0, transpose_mask=False),
+#     ]
+#     return A.Compose(transforms)
 
 
 class BaseDataModule(LightningDataModule):
@@ -139,6 +202,7 @@ class BaseDataModule(LightningDataModule):
         batch_size: int,
         val_batch_size: int,
         num_workers: int,
+        augmentations: DictConfig,
         **kwargs
     ) -> None:
         """
@@ -164,7 +228,8 @@ class BaseDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
-        self.augmentations = get_augmentations()
+        # self.augmentations = get_augmentations()
+        self.augmentations = augmentations
         self.data_input_dir = data_input_dir
         # dataset which is defined in the config
         self.dataset = dataset
@@ -178,24 +243,34 @@ class BaseDataModule(LightningDataModule):
         stage: str
             current stage which is given by Pytorch Lightning
         """
-        self.DS_train = hydra.utils.instantiate(
-            self.dataset,
-            base_dir=self.data_input_dir,
-            split="train",
-            transforms=get_augmentations(),
-        )
-        self.DS_val = hydra.utils.instantiate(
-            self.dataset,
-            base_dir=self.data_input_dir,
-            split="val",
-            transforms=get_augmentations(),
-        )
-        self.DS_test = hydra.utils.instantiate(
-            self.dataset,
-            base_dir=self.data_input_dir,
-            split="test",
-            transforms=get_augmentations(),
-        )
+        if stage in (None, "fit"):
+            transforms_train = get_augmentations_from_config(self.augmentations.TRAIN)[
+                0
+            ]
+            self.DS_train = hydra.utils.instantiate(
+                self.dataset,
+                base_dir=self.data_input_dir,
+                split="train",
+                transforms=transforms_train,
+            )
+        if stage in (None, "fit", "validate"):
+            transforms_val = get_augmentations_from_config(
+                self.augmentations.VALIDATION
+            )[0]
+            self.DS_val = hydra.utils.instantiate(
+                self.dataset,
+                base_dir=self.data_input_dir,
+                split="val",
+                transforms=transforms_val,
+            )
+        if stage in (None, "test"):
+            transforms_test = get_augmentations_from_config(self.augmentations.TEST)[0]
+            self.DS_test = hydra.utils.instantiate(
+                self.dataset,
+                base_dir=self.data_input_dir,
+                split="test",
+                transforms=transforms_test,
+            )
 
     def max_steps(self) -> int:
         """

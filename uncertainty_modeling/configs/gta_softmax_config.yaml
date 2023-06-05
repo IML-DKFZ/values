@@ -2,6 +2,7 @@
 defaults:
   - datamodule: gta_torch_config
   - model: hrnet_config
+  - data_augmentations: tta_augmentations
 exp_name: "Softmax-Debug"
 version: null
 data_input_dir: "/nvme/GTA"

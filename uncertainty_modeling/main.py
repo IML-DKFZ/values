@@ -80,7 +80,6 @@ def main(cfg_hydra: DictConfig):
         _recursive_=False,
     )
     dm.prepare_data()
-    dm.setup("fit")
     model = LightningExperiment(config, **config)
     trainer.fit(model, datamodule=dm)
 
