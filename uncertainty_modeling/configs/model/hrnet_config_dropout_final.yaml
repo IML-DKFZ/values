@@ -1,0 +1,73 @@
+#@package _global_
+model:
+  _target_: uncertainty_modeling.models.hrnet_module.get_seg_model
+  cfg:
+    MODEL: ${MODEL}
+    DATASET:
+      NUM_CLASSES: ${datamodule.num_classes}
+
+MODEL:
+  NAME: hrnet
+  # Set to false, was initially true
+  PRETRAINED: true
+  pretrained_on: ImageNet
+  pretrained_path: /home/kckahl/Code/uncertainty-modeling/uncertainty_modeling/pretrained
+  PRETRAINED_WEIGHTS: ${MODEL.pretrained_path}/${MODEL.available_weights.${MODEL.pretrained_on}}
+  # PRETRAINED_WEIGHTS: /nvme/GTA/Softmax-Debug/test-more-data/checkpoints/epoch=3-step=2000.ckpt
+  available_weights:
+    ImageNet: hrnetv2_w48_imagenet_pretrained.pth
+    Paddle: HRNet_W48_C_ssld_pretrained.pth
+    #Mapillary: mapillary_ocrnet.HRNet_Mscale_fast-rattlesnake.pth
+  ALIGN_CORNERS: False
+  INPUT_CHANNELS: 3
+  EXTRA:
+    DROPOUT_FINAL: True
+    FINAL_CONV_KERNEL: 1
+    STAGE1:
+      NUM_MODULES: 1
+      NUM_BRANCHES: 1
+      BLOCK: BOTTLENECK
+      NUM_BLOCKS:
+        - 4
+      NUM_CHANNELS:
+        - 64
+      FUSE_METHOD: SUM
+    STAGE2:
+      NUM_MODULES: 1
+      NUM_BRANCHES: 2
+      BLOCK: BASIC
+      NUM_BLOCKS:
+        - 4
+        - 4
+      NUM_CHANNELS:
+        - 48
+        - 96
+      FUSE_METHOD: SUM
+    STAGE3:
+      NUM_MODULES: 4
+      NUM_BRANCHES: 3
+      BLOCK: BASIC
+      NUM_BLOCKS:
+        - 4
+        - 4
+        - 4
+      NUM_CHANNELS:
+        - 48
+        - 96
+        - 192
+      FUSE_METHOD: SUM
+    STAGE4:
+      NUM_MODULES: 3
+      NUM_BRANCHES: 4
+      BLOCK: BASIC
+      NUM_BLOCKS:
+        - 4
+        - 4
+        - 4
+        - 4
+      NUM_CHANNELS:
+        - 48
+        - 96
+        - 192
+        - 384
+      FUSE_METHOD: SUM

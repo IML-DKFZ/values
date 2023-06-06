@@ -401,6 +401,11 @@ class HighResolutionNet(nn.Module):
             self.stage4_cfg, num_channels, multi_scale_output=True
         )
 
+        if "DROPOUT_FINAL" in extra:
+            self.dropout_final = extra["DROPOUT_FINAL"]
+        else:
+            self.dropout_final = False
+
         last_inp_channels = int(np.sum(pre_stage_channels))
 
         self.last_layer = nn.Sequential(
@@ -566,19 +571,29 @@ class HighResolutionNet(nn.Module):
                 x_list.append(y_list[i])
         x = self.stage4(x_list)
 
+        x0 = x[0]
+        x1 = x[1]
+        x2 = x[2]
+        x3 = x[3]
+        if self.dropout_final:
+            x0 = F.dropout(x0, 0.5, training=True)
+            x1 = F.dropout(x1, 0.5, training=True)
+            x2 = F.dropout(x2, 0.5, training=True)
+            x3 = F.dropout(x3, 0.5, training=True)
+
         # Upsampling
         x0_h, x0_w = x[0].size(2), x[0].size(3)
         x1 = F.interpolate(
-            x[1], size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
+            x1, size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
         )
         x2 = F.interpolate(
-            x[2], size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
+            x2, size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
         )
         x3 = F.interpolate(
-            x[3], size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
+            x3, size=(x0_h, x0_w), mode="bilinear", align_corners=ALIGN_CORNERS
         )
 
-        x = torch.cat([x[0], x1, x2, x3], 1)
+        x = torch.cat([x0, x1, x2, x3], 1)
 
         x = self.last_layer(x)
 
