@@ -45,11 +45,13 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dropout=False):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = BatchNorm2d(planes, momentum=BN_MOMENTUM)
         self.relu = nn.ReLU(inplace=relu_inplace)
+        if dropout:
+            self.dropout = nn.Dropout(p=0.5)
         self.conv2 = conv3x3(planes, planes)
         self.bn2 = BatchNorm2d(planes, momentum=BN_MOMENTUM)
         self.downsample = downsample
@@ -61,6 +63,8 @@ class BasicBlock(nn.Module):
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
+        if hasattr(self, "dropout"):
+            out = self.dropout(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -77,7 +81,7 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dropout=False):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = BatchNorm2d(planes, momentum=BN_MOMENTUM)
@@ -125,11 +129,12 @@ class HighResolutionModule(nn.Module):
         num_inchannels,
         num_channels,
         fuse_method,
+        dropout,
         multi_scale_output=True,
     ):
         super(HighResolutionModule, self).__init__()
         self._check_branches(
-            num_branches, blocks, num_blocks, num_inchannels, num_channels
+            num_branches, blocks, num_blocks, num_inchannels, num_channels, dropout
         )
 
         self.num_inchannels = num_inchannels
@@ -139,13 +144,13 @@ class HighResolutionModule(nn.Module):
         self.multi_scale_output = multi_scale_output
 
         self.branches = self._make_branches(
-            num_branches, blocks, num_blocks, num_channels
+            num_branches, blocks, num_blocks, num_channels, dropout
         )
         self.fuse_layers = self._make_fuse_layers()
         self.relu = nn.ReLU(inplace=relu_inplace)
 
     def _check_branches(
-        self, num_branches, blocks, num_blocks, num_inchannels, num_channels
+        self, num_branches, blocks, num_blocks, num_inchannels, num_channels, dropout
     ):
         if num_branches != len(num_blocks):
             error_msg = "NUM_BRANCHES({}) <> NUM_BLOCKS({})".format(
@@ -168,7 +173,16 @@ class HighResolutionModule(nn.Module):
 
             raise ValueError(error_msg)
 
-    def _make_one_branch(self, branch_index, block, num_blocks, num_channels, stride=1):
+        if num_branches != len(dropout):
+            error_msg = "NUM_BRANCHES({}) <> NUM_DROPOUT({})".format(
+                num_branches, len(dropout)
+            )
+
+            raise ValueError(error_msg)
+
+    def _make_one_branch(
+        self, branch_index, block, num_blocks, num_channels, dropout, stride=1
+    ):
         downsample = None
         if (
             stride != 1
@@ -195,21 +209,28 @@ class HighResolutionModule(nn.Module):
                 num_channels[branch_index],
                 stride,
                 downsample,
+                dropout[branch_index],
             )
         )
         self.num_inchannels[branch_index] = num_channels[branch_index] * block.expansion
         for i in range(1, num_blocks[branch_index]):
             layers.append(
-                block(self.num_inchannels[branch_index], num_channels[branch_index])
+                block(
+                    self.num_inchannels[branch_index],
+                    num_channels[branch_index],
+                    dropout=dropout[branch_index],
+                )
             )
 
         return nn.Sequential(*layers)
 
-    def _make_branches(self, num_branches, block, num_blocks, num_channels):
+    def _make_branches(self, num_branches, block, num_blocks, num_channels, dropout):
         branches = []
 
         for i in range(num_branches):
-            branches.append(self._make_one_branch(i, block, num_blocks, num_channels))
+            branches.append(
+                self._make_one_branch(i, block, num_blocks, num_channels, dropout)
+            )
 
         return nn.ModuleList(branches)
 
@@ -476,6 +497,10 @@ class HighResolutionNet(nn.Module):
         num_channels = layer_config["NUM_CHANNELS"]
         block = blocks_dict[layer_config["BLOCK"]]
         fuse_method = layer_config["FUSE_METHOD"]
+        if "DROPOUT" in layer_config:
+            dropout = layer_config["DROPOUT"]
+        else:
+            dropout = [False] * num_branches
 
         modules = []
         for i in range(num_modules):
@@ -492,6 +517,7 @@ class HighResolutionNet(nn.Module):
                     num_inchannels,
                     num_channels,
                     fuse_method,
+                    dropout,
                     reset_multi_scale_output,
                 )
             )
@@ -624,9 +650,7 @@ class HighResolutionNet(nn.Module):
             del model_dict, pretrained_dict
             print("Weights successfully loaded")
         else:
-            raise NotImplementedError(
-                "No Pretrained Weights found for {}".format_map(pretrained)
-            )
+            raise NotImplementedError(f"No Pretrained Weights found for {pretrained}")
 
 
 def get_seg_model(cfg, **kwargs):
