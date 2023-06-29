@@ -16,15 +16,23 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         split="train",
         file_pattern: str = "*.npy",
         transforms=None,
+        data_fold_id: int = 0,
     ):
         self.splits_path = splits_path
+        self.data_fold_id = data_fold_id
         self.get_split_keys()
         if split == "train":
             subject_ids = self.tr_keys
         elif split == "val":
             subject_ids = self.val_keys
-        else:
+        elif split == "id_test":
             subject_ids = self.id_test_keys
+        elif split == "ood_test":
+            subject_ids = self.ood_test_keys
+        elif split == "unlabeled":
+            subject_ids = self.unlabeled_keys
+        else:
+            print(f"{split} split not specified!")
 
         self.samples = []
         for dataset in ["gta", "cs"]:
@@ -38,13 +46,18 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
             )
             self.samples.extend(
                 get_data_samples(
-                    base_dir=ds_dir, pattern=file_pattern, subject_ids=ds_subjects
+                    base_dir=ds_dir,
+                    pattern=file_pattern,
+                    subject_ids=ds_subjects,
+                    dataset=dataset,
                 )
             )
 
         # save all paths in lists
         self.imgs = [sample["image_path"] for sample in self.samples]
         self.masks = [sample["label_path"] for sample in self.samples]
+        self.image_ids = [sample["image_id"] for sample in self.samples]
+        self.datasets = [sample["dataset"] for sample in self.samples]
 
         self.transforms = transforms
         print(
@@ -66,7 +79,12 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         img = transformed["image"]
         mask = transformed["mask"]
 
-        return {"data": img.float(), "seg": mask}  # .long()
+        return {
+            "data": img.float(),
+            "seg": mask,
+            "image_id": self.image_ids[idx],
+            "dataset": self.datasets[idx],
+        }  # .long()
 
     def __len__(self):
         return len(self.imgs)
@@ -78,17 +96,18 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         """
         with open(self.splits_path, "rb") as f:
             splits = pickle.load(f)
-        self.data_fold_id = 0
         self.tr_keys = splits[self.data_fold_id]["train"]
         self.val_keys = splits[self.data_fold_id]["val"]
         self.id_test_keys = splits[self.data_fold_id]["id_test"]
         self.ood_test_keys = splits[self.data_fold_id]["ood_test"]
+        self.unlabeled_keys = splits[self.data_fold_id]["id_unlabeled_pool"]
+        self.unlabeled_keys = np.concatenate(
+            (self.unlabeled_keys, splits[self.data_fold_id]["ood_unlabeled_pool"])
+        )
 
 
 def get_data_samples(
-    base_dir: str,
-    pattern: str = "*.npy",
-    subject_ids=None,
+    base_dir: str, pattern: str = "*.npy", subject_ids=None, dataset: str = "gta"
 ):
     """
     Return a list of all possible input samples in the dataset by returning all possible slices for each subject id.
@@ -120,6 +139,8 @@ def get_data_samples(
                 {
                     "image_path": image_path,
                     "label_path": label_path,
+                    "image_id": image_filename.split(".")[0],
+                    "dataset": dataset,
                 }
             )
 

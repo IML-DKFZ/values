@@ -125,7 +125,7 @@ class BaseDataModule(LightningDataModule):
         val_batch_size: int,
         num_workers: int,
         augmentations: DictConfig,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         __init__ the LightningModule
@@ -155,6 +155,7 @@ class BaseDataModule(LightningDataModule):
         self.data_input_dir = data_input_dir
         # dataset which is defined in the config
         self.dataset = dataset
+        self.test_split = kwargs.get("test_split", None)
 
     def setup(self, stage: str = None) -> None:
         """
@@ -187,10 +188,15 @@ class BaseDataModule(LightningDataModule):
             )
         if stage in (None, "test"):
             transforms_test = get_augmentations_from_config(self.augmentations.TEST)[0]
+            test_split = (
+                self.test_split
+                if self.test_split == "unlabeled"
+                else f"{self.test_split}_test"
+            )
             self.DS_test = hydra.utils.instantiate(
                 self.dataset,
                 base_dir=self.data_input_dir,
-                split="test",
+                split=test_split,
                 transforms=transforms_test,
             )
 

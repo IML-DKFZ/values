@@ -80,7 +80,12 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         default=1,
         help="Number of predictions to make by the model",
     )
-
+    parser.add_argument(
+        "--n_reference_samples",
+        type=int,
+        default=5,
+        help="Number of generated reference samples if samples are simulated",
+    )
     parser.add_argument(
         "--test_split",
         type=str,
@@ -196,7 +201,9 @@ def dir_and_subjects_from_train_lidc(
     return test_data_dir, subject_ids
 
 
-def load_models_from_checkpoint(checkpoints: List[Dict]) -> List[nn.Module]:
+def load_models_from_checkpoint(
+    checkpoints: List[Dict], device="cuda"
+) -> List[nn.Module]:
     """
     Load the model for the predictions from a checkpoint
     Args:
@@ -218,7 +225,7 @@ def load_models_from_checkpoint(checkpoints: List[Dict]) -> List[nn.Module]:
         else:
             model = hydra.utils.instantiate(hparams["model"])
         model.load_state_dict(state_dict=state_dict)
-        all_models.append(model)
+        all_models.append(model.to(device))
     return all_models
 
 
@@ -264,7 +271,9 @@ def calculate_test_metrics(
     # return metrics_dict
 
 
-def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> Dict:
+def calculate_ged(
+    output_softmax: torch.Tensor, ground_truth: torch.Tensor, ignore_index: int = 0
+) -> Dict:
     dist_gt_pred = []
     for seg_idx in range(ground_truth.shape[0]):
         gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
@@ -272,7 +281,7 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
             pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
                 torch.FloatTensor
             )
-            dist = 1 - dice(pred_softmax, gt_seg, ignore_index=0)
+            dist = 1 - dice(pred_softmax, gt_seg, ignore_index=ignore_index)
             dist_gt_pred.append(dist)
     dist_pred_pred = []
     for pred_idx_1 in range(output_softmax.shape[0]):
@@ -285,7 +294,11 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
                 torch.FloatTensor
             )
             pred_2 = torch.argmax(pred_softmax_2, dim=1).type(torch.LongTensor)
-            dist = 1 - dice(pred_1, pred_2, ignore_index=0)
+            # TODO: does this apply in all cases that we can simply set no ignore index between
+            #  predictions except when not including background (0)?
+            dist = 1 - dice(
+                pred_1, pred_2, ignore_index=ignore_index if ignore_index == 0 else None
+            )
             dist_pred_pred.append(dist)
     dist_gt_gt = []
     for seg_idx_1 in range(ground_truth.shape[0]):
@@ -294,7 +307,10 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
             gt_seg_2 = torch.unsqueeze(ground_truth[seg_idx_2], 0).type(
                 torch.LongTensor
             )
-            dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=0)
+            if torch.any(gt_seg_1 == ignore_index):
+                dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=ignore_index)
+            else:
+                dist = 1 - dice(gt_seg_1, gt_seg_2)
             dist_gt_gt.append(dist)
     ged = 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
 
@@ -307,7 +323,7 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
                 pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
                     torch.FloatTensor
                 )
-                dice_score = dice(pred_softmax, gt_seg, ignore_index=0)
+                dice_score = dice(pred_softmax, gt_seg, ignore_index=ignore_index)
                 if dice_score > max_dice:
                     max_dice = dice_score
             max_dice_rater.append(max_dice)
@@ -322,7 +338,7 @@ def calculate_ged(output_softmax: torch.Tensor, ground_truth: torch.Tensor) -> D
                 gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(
                     torch.LongTensor
                 )
-                dice_score = dice(pred_softmax, gt_seg, ignore_index=0)
+                dice_score = dice(pred_softmax, gt_seg, ignore_index=ignore_index)
                 if dice_score > max_dice:
                     max_dice = dice_score
             dice_sum += max_dice
@@ -428,49 +444,54 @@ def predict_cases(
     return test_datacarrier
 
 
+def calculate_uncertainty(softmax_preds: torch.Tensor, ssn: bool = False):
+    uncertainty_dict = {}
+    # softmax_preds = torch.from_numpy(softmax_preds)
+    mean_softmax = torch.mean(softmax_preds, dim=0)
+    pred_entropy = torch.zeros(*softmax_preds.shape[2:]).to(mean_softmax.device)
+    for y in range(mean_softmax.shape[0]):
+        pred_entropy_class = mean_softmax[y] * torch.log(mean_softmax[y])
+        nan_pos = torch.isnan(pred_entropy_class)
+        pred_entropy[~nan_pos] += pred_entropy_class[~nan_pos]
+    pred_entropy *= -1
+    expected_entropy = torch.zeros(softmax_preds.shape[0], *softmax_preds.shape[2:]).to(
+        softmax_preds.device
+    )
+    for pred in range(softmax_preds.shape[0]):
+        entropy = torch.zeros(*softmax_preds.shape[2:]).to(softmax_preds.device)
+        for y in range(softmax_preds.shape[1]):
+            entropy_class = softmax_preds[pred, y] * torch.log(softmax_preds[pred, y])
+            nan_pos = torch.isnan(entropy_class)
+            entropy[~nan_pos] += entropy_class[~nan_pos]
+        entropy *= -1
+        expected_entropy[pred] = entropy
+    expected_entropy = torch.mean(expected_entropy, dim=0)
+    mutual_information = pred_entropy - expected_entropy
+    uncertainty_dict["pred_entropy"] = pred_entropy
+    if not ssn:
+        uncertainty_dict["aleatoric_uncertainty"] = expected_entropy
+        uncertainty_dict["epistemic_uncertainty"] = mutual_information
+    else:
+        print("mutual information is aleatoric unc")
+        uncertainty_dict["aleatoric_uncertainty"] = mutual_information
+        uncertainty_dict["epistemic_uncertainty"] = expected_entropy
+    # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
+    return uncertainty_dict
+
+
+def calculate_one_minus_msr(softmax_pred: torch.Tensor):
+    uncertainty_dict = {}
+    max_softmax = softmax_pred.max(dim=0)[0]
+    uncertainty_dict["pred_entropy"] = 1 - max_softmax
+    return uncertainty_dict
+
+
 def caculcate_uncertainty_multiple_pred(
     test_datacarrier: DataCarrier3D, ssn: bool = False
 ) -> None:
     for key, value in test_datacarrier.data.items():
         softmax_preds = torch.from_numpy(value["softmax_pred"])
-        mean_softmax = torch.mean(softmax_preds, dim=0)
-        pred_entropy = torch.zeros(
-            softmax_preds.shape[2],
-            softmax_preds.shape[3],
-            softmax_preds.shape[4],
-        )
-        for y in range(mean_softmax.shape[0]):
-            pred_entropy += mean_softmax[y] * torch.log(mean_softmax[y])
-        pred_entropy *= -1
-        expected_entropy = torch.zeros(
-            softmax_preds.shape[0],
-            softmax_preds.shape[2],
-            softmax_preds.shape[3],
-            softmax_preds.shape[4],
-        )
-        for pred in range(softmax_preds.shape[0]):
-            entropy = torch.zeros(
-                softmax_preds.shape[2],
-                softmax_preds.shape[3],
-                softmax_preds.shape[4],
-            )
-            for y in range(softmax_preds.shape[1]):
-                entropy += softmax_preds[pred, y, :, :, :] * torch.log(
-                    softmax_preds[pred, y, :, :, :]
-                )
-            entropy *= -1
-            expected_entropy[pred] = entropy
-        expected_entropy = torch.mean(expected_entropy, dim=0)
-        mutual_information = pred_entropy - expected_entropy
-        value["pred_entropy"] = pred_entropy
-        if not ssn:
-            value["aleatoric_uncertainty"] = expected_entropy
-            value["epistemic_uncertainty"] = mutual_information
-        else:
-            print("mutual information is aleatoric unc")
-            value["aleatoric_uncertainty"] = mutual_information
-            value["epistemic_uncertainty"] = expected_entropy
-        # value["softmax_pred"] = np.mean(value["softmax_pred"], axis=0)
+        value.update(calculate_uncertainty(softmax_preds, ssn))
     return
 
 
@@ -634,5 +655,4 @@ def run_test(args: Namespace) -> None:
 
 if __name__ == "__main__":
     arguments = test_cli()
-    # random.seed(14)
     run_test(arguments)
