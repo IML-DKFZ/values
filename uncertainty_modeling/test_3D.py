@@ -61,6 +61,13 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         "Specify this if you train and test on different machines (E.g. training on cluster and local testing).",
     )
     parser.add_argument(
+        "--exp_name",
+        type=str,
+        default=None,
+        help="If given, uses this string as experiment name. "
+        "Otherwise, the experiment name will be inferred from the checkpoint.",
+    )
+    parser.add_argument(
         "--test_data_dir",
         type=str,
         default=None,

@@ -38,7 +38,7 @@ class Tester:
         self.save_root_dir = (
             args.save_dir if args.save_dir is not None else hparams["save_dir"]
         )
-        self.exp_name = hparams["exp_name"]
+        self.exp_name = hparams["exp_name"] if args.exp_name is None else args.exp_name
         self.version = str(hparams["version"])
         self.test_split = args.test_split
         self.create_save_dirs()
@@ -113,7 +113,12 @@ class Tester:
         return dm.test_dataloader()
 
     def save_prediction(self, image_id, image_preds, mean_pred, ignore_index_map):
-        image_preds_mean = torch.cat([mean_pred.unsqueeze(0), image_preds], dim=0)
+        multiple_preds = False
+        if image_preds.shape[0] > 1:
+            image_preds_mean = torch.cat([mean_pred.unsqueeze(0), image_preds], dim=0)
+            multiple_preds = True
+        else:
+            image_preds_mean = image_preds
         for output_idx, output in enumerate(image_preds_mean):
             output = torch.moveaxis(output, 0, -1)
             # output_softmax_np = output.detach().cpu().numpy()
@@ -125,8 +130,12 @@ class Tester:
             ]
             for k, v in cs_labels.trainId2color.items():
                 output_np_color[(output_np == k).squeeze(-1), :] = v
+            if not multiple_preds:
+                output_idx += 1
             img_name = (
-                f"{image_id}_{output_idx}" if output_idx != 0 else f"{image_id}_mean"
+                f"{image_id}_mean"
+                if output_idx == 0 and multiple_preds
+                else f"{image_id}_{str(output_idx).zfill(2)}"
             )
             # np.savez_compressed(
             #     os.path.join(self.save_pred_prob_dir, f"{img_name}.npz"),
