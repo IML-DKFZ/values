@@ -1,5 +1,6 @@
 import math
 import os
+from random import randrange
 from typing import Optional, Tuple, List
 from argparse import Namespace, ArgumentParser
 
@@ -33,7 +34,7 @@ class LightningExperiment(pl.LightningModule):
         nested_hparam_dict: Optional[dict] = None,
         aleatoric_loss: bool = False,
         n_aleatoric_samples: int = 10,
-        pretrain_epochs: int = 20,
+        pretrain_epochs: int = 5,
         *args,
         **kwargs
     ):
@@ -171,6 +172,55 @@ class LightningExperiment(pl.LightningModule):
         """
         return self.model(x, **kwargs)
 
+    def forward_ssn(self, batch: dict, target: torch.Tensor, val: bool = False):
+        if self.current_epoch < self.pretrain_epochs:
+            mean = self.forward(batch["data"], mean_only=True)
+            samples = mean.rsample([self.n_aleatoric_samples])
+        else:
+            distribution = self.forward(batch["data"])
+            samples = distribution.rsample([self.n_aleatoric_samples])
+        samples = samples.view(
+            [
+                self.n_aleatoric_samples,
+                batch["data"].size()[0],
+                self.model.num_classes,
+                *batch["data"].size()[2:],
+            ]
+        )
+        if val:
+            val_dice = torch.zeros([self.n_aleatoric_samples])
+            sample_labels = torch.argmax(samples, dim=2)
+            for idx, sample in enumerate(sample_labels):
+                val_dice[idx] = dice(sample, target, ignore_index=self.ignore_index)
+            val_dice = torch.mean(val_dice)
+            # one sample batch for visualization
+            sample_idx = randrange(self.n_aleatoric_samples)
+            output = samples[sample_idx]
+        # if self.current_epoch < self.pretrain_epochs:
+        #     loss = F.cross_entropy(samples[0], target, ignore_index=self.ignore_index)
+        # else:
+        target = target.unsqueeze(1)
+        target = target.expand((self.n_aleatoric_samples,) + target.shape)
+        flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
+        samples = samples.view(flat_size, self.model.num_classes, -1)
+        target = target.reshape(flat_size, -1)
+        if self.ignore_index != 0:
+            log_prob = -F.cross_entropy(
+                samples, target, ignore_index=self.ignore_index, reduction="none"
+            ).view((self.n_aleatoric_samples, batch["data"].size()[0], -1))
+        else:
+            log_prob = -F.cross_entropy(samples, target, reduction="none").view(
+                (self.n_aleatoric_samples, batch["data"].size()[0], -1)
+            )
+        loglikelihood = torch.mean(
+            torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
+            - math.log(self.n_aleatoric_samples)
+        )
+        loss = -loglikelihood
+        if val:
+            return loss, output, val_dice
+        return loss
+
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         """Perform a training step, i.e. pass a batch to the network and calculate the loss.
 
@@ -182,42 +232,12 @@ class LightningExperiment(pl.LightningModule):
             loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze(1)
-        if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
-            if self.current_epoch < self.pretrain_epochs:
-                mean = self.forward(batch["data"], mean_only=True)
-                samples = mean.rsample([self.n_aleatoric_samples])
-            else:
-                distribution = self.forward(batch["data"])
-                samples = distribution.rsample([self.n_aleatoric_samples])
-            samples = samples.view(
-                [
-                    self.n_aleatoric_samples,
-                    batch["data"].size()[0],
-                    self.model.num_classes,
-                    *batch["data"].size()[-3:],
-                ]
-            )
-            target = target.unsqueeze(1)
-            target = target.expand((self.n_aleatoric_samples,) + target.shape)
-            flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
-            samples = samples.view(flat_size, self.model.num_classes, -1)
-            target = target.reshape(flat_size, -1)
-            log_prob = -F.cross_entropy(samples, target, reduction="none").view(
-                (self.n_aleatoric_samples, batch["data"].size()[0], -1)
-            )
-            # dice_intersect = -self.dice_loss(samples, target, only_intersect=True).view(
-            #     (self.n_aleatoric_samples, batch["data"].size()[0])
-            # )
-            loglikelihood = torch.mean(
-                torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
-                - math.log(self.n_aleatoric_samples)
-            )
-            # dice_logsumexp = torch.mean(
-            #     torch.logsumexp(dice_intersect, dim=0)
-            #     - math.log(self.n_aleatoric_samples)
-            # )
-            # loss = -loglikelihood - target.size()[-1] * dice_logsumexp
-            loss = -loglikelihood
+        # TODO: check if this works with all models
+        if (
+            type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D
+            or self.model.ssn
+        ):
+            loss = self.forward_ssn(batch, target)
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])
@@ -269,39 +289,11 @@ class LightningExperiment(pl.LightningModule):
             val_loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze(1)
-        if type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D:
-            if self.current_epoch < self.pretrain_epochs:
-                mean = self.forward(batch["data"], mean_only=True)
-                samples = mean.rsample([self.n_aleatoric_samples])
-            else:
-                distribution = self.forward(batch["data"])
-                samples = distribution.rsample([self.n_aleatoric_samples])
-            samples = samples.view(
-                [
-                    self.n_aleatoric_samples,
-                    batch["data"].size()[0],
-                    self.model.num_classes,
-                    *batch["data"].size()[-3:],
-                ]
-            )
-            val_dice = torch.zeros([self.n_aleatoric_samples])
-            for idx, sample in enumerate(samples):
-                val_dice[idx] = dice(sample, target, ignore_index=self.ignore_index)
-            val_dice = torch.mean(val_dice)
-
-            target = target.unsqueeze(1)
-            target = target.expand((self.n_aleatoric_samples,) + target.shape)
-            flat_size = self.n_aleatoric_samples * batch["data"].size()[0]
-            samples = samples.view(flat_size, self.model.num_classes, -1)
-            target = target.reshape(flat_size, -1)
-            log_prob = -F.cross_entropy(samples, target, reduction="none").view(
-                (self.n_aleatoric_samples, batch["data"].size()[0], -1)
-            )
-            loglikelihood = torch.mean(
-                torch.logsumexp(torch.sum(log_prob, dim=-1), dim=0)
-                - math.log(self.n_aleatoric_samples)
-            )
-            val_loss = -loglikelihood
+        if (
+            type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D
+            or self.model.ssn
+        ):
+            val_loss, output, val_dice = self.forward_ssn(batch, target, val=True)
         elif self.aleatoric_loss:
             device = "cuda" if torch.cuda.is_available() else "cpu"
             mu, s = self.forward(batch["data"])

@@ -190,7 +190,7 @@ class BaseDataModule(LightningDataModule):
             transforms_test = get_augmentations_from_config(self.augmentations.TEST)[0]
             test_split = (
                 self.test_split
-                if self.test_split == "unlabeled"
+                if self.test_split == "unlabeled" or self.test_split == "val"
                 else f"{self.test_split}_test"
             )
             self.DS_test = hydra.utils.instantiate(

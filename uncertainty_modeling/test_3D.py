@@ -94,6 +94,13 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         help="Number of generated reference samples if samples are simulated",
     )
     parser.add_argument(
+        "--test_batch_size",
+        type=int,
+        default=12,
+        nargs="?",
+        help="Size of the test batches to pass. If specified without number, uses same batch size as used in training.",
+    )
+    parser.add_argument(
         "--test_split",
         type=str,
         default="id",
@@ -209,7 +216,7 @@ def dir_and_subjects_from_train_lidc(
 
 
 def load_models_from_checkpoint(
-    checkpoints: List[Dict], device="cuda"
+    checkpoints: List[Dict], device="cpu"
 ) -> List[nn.Module]:
     """
     Load the model for the predictions from a checkpoint

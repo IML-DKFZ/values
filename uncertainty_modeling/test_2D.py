@@ -28,6 +28,7 @@ class Tester:
         hparams = self.all_checkpoints[0]["hyper_parameters"]
         set_seed(hparams["seed"])
         self.ignore_index = hparams["datamodule"]["ignore_index"]
+        self.test_batch_size = args.test_batch_size
         self.test_dataloader = self.get_test_dataloader(args, hparams)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.models = load_models_from_checkpoint(
@@ -99,8 +100,8 @@ class Tester:
                 "dataset"
             ]["splits_path"].replace(hparams["data_input_dir"], args.data_input_dir)
         hparams = self.set_n_reference_samples(hparams, args.n_reference_samples)
-        # TODO: do not hardcode
-        hparams["datamodule"]["val_batch_size"] = 12
+        if self.test_batch_size:
+            hparams["datamodule"]["val_batch_size"] = self.test_batch_size
         dm = hydra.utils.instantiate(
             hparams["datamodule"],
             data_input_dir=data_input_dir,
@@ -275,11 +276,25 @@ class Tester:
                 "dataset": batch["dataset"],
             }
             for model in self.models:
-                for pred in range(self.n_pred):
-                    # print(batch["data"].device)
-                    output = model.forward(batch["data"].to(self.device))
-                    output_softmax = F.softmax(output, dim=1)  # .to("cpu")
-                    all_preds["softmax_pred"].append(output_softmax)
+                if model.ssn:
+                    distribution = model.forward(batch["data"].to(self.device))
+                    output_samples = distribution.sample([self.n_pred])
+                    output_samples = output_samples.view(
+                        [
+                            self.n_pred,
+                            batch["data"].size()[0],
+                            model.num_classes,
+                            *batch["data"].size()[2:],
+                        ]
+                    )
+                    for output_sample in output_samples:
+                        output_softmax = F.softmax(output_sample, dim=1)
+                        all_preds["softmax_pred"].append(output_softmax)
+                else:
+                    for pred in range(self.n_pred):
+                        output = model.forward(batch["data"].to(self.device))
+                        output_softmax = F.softmax(output, dim=1)  # .to("cpu")
+                        all_preds["softmax_pred"].append(output_softmax)
             all_preds["softmax_pred"] = torch.stack(all_preds["softmax_pred"])
             self.process_output(all_preds)
         self.save_results_dict()

@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 import torch._utils
 import torch.nn.functional as F
+import torch.distributions as td
 
 # import logging
 # log=logging.getLogger(__name__)
@@ -344,6 +345,7 @@ class HighResolutionNet(nn.Module):
         extra = config.MODEL.EXTRA
         super(HighResolutionNet, self).__init__()
         ALIGN_CORNERS = config.MODEL.ALIGN_CORNERS
+        self.num_classes = config.DATASET.NUM_CLASSES
 
         # stem net
         self.conv1 = nn.Conv2d(
@@ -426,6 +428,32 @@ class HighResolutionNet(nn.Module):
                 padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0,
             ),
         )
+
+        if "SSN" in config.MODEL:
+            self.ssn = config.MODEL["SSN"]
+            self.rank = config.MODEL["SSN_RANK"]
+            self.epsilon = config.MODEL["SSN_EPS"]
+        else:
+            self.ssn = False
+        if self.ssn:
+            self.cov_factor_conv = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=last_inp_channels,
+                    out_channels=last_inp_channels,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                ),
+                BatchNorm2d(last_inp_channels, momentum=BN_MOMENTUM),
+                nn.ReLU(inplace=relu_inplace),
+                nn.Conv2d(
+                    in_channels=last_inp_channels,
+                    out_channels=config.DATASET.NUM_CLASSES * self.rank,
+                    kernel_size=extra.FINAL_CONV_KERNEL,
+                    stride=1,
+                    padding=1 if extra.FINAL_CONV_KERNEL == 3 else 0,
+                ),
+            )
 
     def _make_transition_layer(self, num_channels_pre_layer, num_channels_cur_layer):
         num_branches_cur = len(num_channels_cur_layer)
@@ -530,7 +558,45 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def forward(self, x):
+    def hrnet_ssn(self, x, x_size, mean_only):
+        mean = self.last_layer(x)
+        mean = F.interpolate(
+            mean, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS
+        )
+        batch_size = mean.shape[0]
+        mean = mean.view((batch_size, -1))
+        # if mean_only:
+        #     return mean
+        cov_diag = self.last_layer(x).exp() + self.epsilon
+        cov_diag = F.interpolate(
+            cov_diag, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS
+        )
+        cov_diag = cov_diag.view((batch_size, -1))
+        if mean_only:
+            cov_factor = torch.zeros([*cov_diag.shape, self.rank])
+        else:
+            cov_factor = self.cov_factor_conv(x)
+            cov_factor = F.interpolate(
+                cov_factor, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS
+            )
+            cov_factor = cov_factor.view((batch_size, self.rank, self.num_classes, -1))
+            cov_factor = cov_factor.flatten(2, 3)
+            cov_factor = cov_factor.transpose(1, 2)
+        try:
+            distribution = td.LowRankMultivariateNormal(
+                loc=mean, cov_factor=cov_factor, cov_diag=cov_diag
+            )
+        except:
+            print(
+                "Covariance became not invertible using independent normals for this batch!"
+            )
+            distribution = td.Independent(
+                td.Normal(loc=mean, scale=torch.sqrt(cov_diag)), 1
+            )
+
+        return distribution
+
+    def forward(self, x, mean_only=False):
         x_size = x.size(2), x.size(3)
 
         x = self.conv1(x)
@@ -595,9 +661,14 @@ class HighResolutionNet(nn.Module):
 
         x = torch.cat([x0, x1, x2, x3], 1)
 
-        x = self.last_layer(x)
+        if self.ssn:
+            return self.hrnet_ssn(x, x_size, mean_only)
+        else:
+            x = self.last_layer(x)
 
-        x = F.interpolate(x, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS)
+            x = F.interpolate(
+                x, size=x_size, mode="bilinear", align_corners=ALIGN_CORNERS
+            )
 
         return x
 

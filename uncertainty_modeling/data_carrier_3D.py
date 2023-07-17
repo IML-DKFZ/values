@@ -31,6 +31,7 @@ class DataCarrier3D:
             exp_name: Name of the experiment
             version: version of the experiment
         """
+        # TODO: probably outdated if statement
         if id is None:
             self.save_dir = os.path.join(
                 root_dir, exp_name, "test_results", str(version)
