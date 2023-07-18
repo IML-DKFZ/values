@@ -1,0 +1,24 @@
+{
+  "input_files": [
+    "ballSphere.stl"
+  ],
+  "save_path": "Case_3b/imagesTs",
+  "n_samples": 21,
+  "image_size": [
+    64,
+    64,
+    64
+  ],
+  "min_object_ratio": 5,
+  "max_object_ratio": 2,
+  "gauss_sigma": 8,
+  "object_gray": false,
+  "blur": true,
+  "noise": true,
+  "segmentation": true,
+  "n_raters": 3,
+  "object_over_border": false,
+  "sample_offset": 42,
+  "seed": 34,
+  "all_raters_same": false
+}

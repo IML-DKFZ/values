@@ -1,0 +1,20 @@
+{
+  "input_files": [
+    "ballSphere.stl"
+  ],
+  "save_path": "Case_1/Test",
+  "n_samples": 20,
+  "image_size": [
+    64,
+    64,
+    64
+  ],
+  "min_object_ratio": 5,
+  "max_object_ratio": 2,
+  "gauss_sigma": 2,
+  "blur": true,
+  "noise": false,
+  "segmentation": true,
+  "n_raters": 3,
+  "seed": 5
+}
