@@ -41,3 +41,25 @@ summarized in a csv file (id_ood.csv). To create this csv file (necessary for la
 python id_ood.py -d <path to cropped nodules>
 ```
 
+## Generating split files for first training cycle
+
+Generating the datatset splits into training and testing is special for the LIDC-IDRI dataset, since the i.i.d. and OoD
+information of the nodules have to be considered (see [this section](#Determine i.i.d and OoD nodules) for how to 
+create the csv file in the appropriate format). Furthermore, it has to be ensured that no patient is in the training
+and test dataset at the same time. To create a split file for the initial training cycle that also includes an unlabeled
+pool for active learning experiments, run
+
+```
+python splits_first_cycle.py -d <path to cropped nodules> -f <metadata feature for splitting, e.g. malignancy>
+```
+
+or 
+
+```
+python splits_first_cycle.py -s <path to store splits> --id_ood_csv <path to csv with i.i.d. and OoD information> -f <metadata feature for splitting, e.g. malignancy>
+```
+
+As features for splitting, we used texture and malignancy. Here you can see a diagram how the splits are created:
+
+![Splits for the initial training](./Splits_AL.png)
+
