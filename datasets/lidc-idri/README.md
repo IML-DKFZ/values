@@ -61,5 +61,14 @@ python splits_first_cycle.py -s <path to store splits> --id_ood_csv <path to csv
 
 As features for splitting, we used texture and malignancy. Here you can see a diagram how the splits are created:
 
-![Splits for the initial training](./Splits_AL.png)
+<img src="./Splits_AL.png" alt="Splits for the initial training" width="50%">
 
+## Preprocess the data
+
+To preprocess the data, i.e. normalize the images and save them as numpy arrays for the input for later training, 
+you can use the preprocess_datasets_3d script in the datasets folder of this repository. To execute the script, run
+
+```
+cd ..
+python preprocess_datasets_3d.py -d <base path to cropped nodules and labels> -r 4 --dataset lidc
+```

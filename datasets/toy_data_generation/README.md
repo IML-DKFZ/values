@@ -30,6 +30,16 @@ run
 python dataset_generation_benchmark.py -h
 ```
 
+### Preprocess the data
+
+To preprocess the data, i.e. normalize the images and save them as numpy arrays for the input for later training, 
+you can use the preprocess_datasets_3d script in the datasets folder of this repository. To execute the script, run
+
+```
+cd ..
+python preprocess_datasets_3d.py -d <base path to toy data dir> -r 3 -i imagesTr imagesTs -l labelsTr labelsTs --dataset toy
+```
+
 ## Create your own custom toy datasets
 
 ### Current workflow with Blender
