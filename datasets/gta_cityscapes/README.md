@@ -96,3 +96,20 @@ For the images and labels, a numpy version is created that is used as input for 
 is created with visualizations of the images as png files and color maps of the labels instead of int labels.
 
 Note, that especially for the gta dataset the preprocessing takes quite a while as 24,904 cases are preprocessed.
+
+## Generating split files for first training cycle
+
+For the initial training with this dataset, only GTA images are used. The cityscapes train images are put in the 
+unlabeled pool and the cityscapes validation images will be used as OoD testset. The testset of the GTA images is 
+generated randomly. To create the split file for the initial training cycle, run
+
+```
+python gta_cs_splits_first_cycle.py -d <path to both datasets with preprocessed data, e.g. /home/user/GTA>
+```
+
+You can also specify a different directory for the original dataset if your preprocessed data is stored in a different
+directory than the original dataset.
+
+Note, that the dataset has to be [preprocessed](#Preprocess the data) first.
+
+
