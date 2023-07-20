@@ -40,6 +40,53 @@ cd ..
 python preprocess_datasets_3d.py -d <base path to toy data dir> -r 3 -i imagesTr imagesTs -l labelsTr labelsTs --dataset toy
 ```
 
+### Generating split files
+
+To generate the train / val / test split for training, run
+
+```
+python create_splits.py -d <base path to toy data dir>
+```
+
+Note, that in contrast to the other datasets, no active learning experiments were performed on the toy dataset.
+This means that in the split file, only a simple train / val / test split is generated without unlabeled pool.
+
+### Folder structure
+
+If you set up everything like described above, your toy dataset structure should look like this:
+
+    Case_X
+    ├── imagesTr
+      ├── 0000.nii.gz
+      ├── 0001.nii.gz
+      ├── ...
+    ├── imagesTs
+      ├── 0000.nii.gz
+      ├── 0001.nii.gz
+      ├── ...
+    ├── labelsTr
+      ├── 0000_00.nii.gz
+      ├── ...
+    ├── labelsTs
+      ├── 0000_00.nii.gz
+      ├── ...
+    ├── preprocessed
+       ├── imagesTr
+         ├── 0000.npy
+         ├── 0001.npy
+         ├── ...
+       ├── imagesTs
+         ├── 0000.npy
+         ├── 0001.npy
+         ├── ...
+       ├── labelsTr
+         ├── 0000_00.npy
+         ├── ...
+       ├── labelsTs
+         ├── 0000_00.npy
+         ├── ...
+    ├── splits.pkl
+
 ## Create your own custom toy datasets
 
 ### Current workflow with Blender
