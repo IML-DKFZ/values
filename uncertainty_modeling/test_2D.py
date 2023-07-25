@@ -206,8 +206,13 @@ class Tester:
         pred_shape = all_preds["softmax_pred"].shape
         # The extra dimension is added to enable that torchmetrics can deal with ignore index outside of softmax dimensions
         extra_dimension = torch.zeros(
-            pred_shape[0], pred_shape[1], 1, pred_shape[3], pred_shape[4]
-        ).to(self.device)
+            pred_shape[0],
+            pred_shape[1],
+            1,
+            pred_shape[3],
+            pred_shape[4],
+            device=self.device,
+        )
         all_preds["softmax_pred"] = torch.cat(
             (all_preds["softmax_pred"], extra_dimension), dim=2
         )
@@ -232,8 +237,9 @@ class Tester:
             self.results_dict[image_id]["metrics"].update(
                 calculate_ged(
                     image_preds,
-                    all_preds["gt"][image_idx],
+                    all_preds["gt"][image_idx].to(self.device),
                     ignore_index=image_preds.shape[1] - 1,
+                    ged_only=True,
                 )
             )
             if image_preds.shape[0] > 1:

@@ -286,49 +286,42 @@ def calculate_test_metrics(
 
 
 def calculate_ged(
-    output_softmax: torch.Tensor, ground_truth: torch.Tensor, ignore_index: int = 0
+    output_softmax: torch.Tensor,
+    ground_truth: torch.Tensor,
+    ignore_index: int = 0,
+    ged_only=False,
 ) -> Dict:
-    dist_gt_pred = []
-    for seg_idx in range(ground_truth.shape[0]):
-        gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
-        for pred_idx in range(output_softmax.shape[0]):
-            pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
-                torch.FloatTensor
-            )
-            dist = 1 - dice(pred_softmax, gt_seg, ignore_index=ignore_index)
-            dist_gt_pred.append(dist)
-    dist_pred_pred = []
-    for pred_idx_1 in range(output_softmax.shape[0]):
-        pred_softmax_1 = torch.unsqueeze(output_softmax[pred_idx_1], 0).type(
-            torch.FloatTensor
-        )
-        pred_1 = torch.argmax(pred_softmax_1, dim=1).type(torch.LongTensor)
-        for pred_idx_2 in range(output_softmax.shape[0]):
-            pred_softmax_2 = torch.unsqueeze(output_softmax[pred_idx_2], 0).type(
-                torch.FloatTensor
-            )
-            pred_2 = torch.argmax(pred_softmax_2, dim=1).type(torch.LongTensor)
-            # TODO: does this apply in all cases that we can simply set no ignore index between
-            #  predictions except when not including background (0)?
-            dist = 1 - dice(
-                pred_1, pred_2, ignore_index=ignore_index if ignore_index == 0 else None
-            )
-            dist_pred_pred.append(dist)
-    dist_gt_gt = []
-    for seg_idx_1 in range(ground_truth.shape[0]):
-        gt_seg_1 = torch.unsqueeze(ground_truth[seg_idx_1], 0).type(torch.LongTensor)
-        for seg_idx_2 in range(ground_truth.shape[0]):
-            gt_seg_2 = torch.unsqueeze(ground_truth[seg_idx_2], 0).type(
-                torch.LongTensor
-            )
-            if torch.any(gt_seg_1 == ignore_index):
-                dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=ignore_index)
-            else:
-                dist = 1 - dice(gt_seg_1, gt_seg_2)
-            dist_gt_gt.append(dist)
-    ged = 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
+    gt_repeat = torch.repeat_interleave(ground_truth, output_softmax.shape[0], 0)
+    pred_repeat = output_softmax.repeat(
+        ground_truth.shape[0], *((output_softmax.ndim - 1) * [1])
+    )
+    dist_gt_pred_2 = 1 - dice(
+        pred_repeat,
+        gt_repeat,
+        ignore_index=ignore_index,
+    )
+    pred_1_repeat = torch.repeat_interleave(output_softmax, output_softmax.shape[0], 0)
+    pred_1_repeat = torch.argmax(pred_1_repeat, dim=1)
+    pred_2_repeat = output_softmax.repeat(
+        output_softmax.shape[0], *((output_softmax.ndim - 1) * [1])
+    )
+    pred_2_repeat = torch.argmax(pred_2_repeat, dim=1)
+    dist_pred_pred_2 = 1 - dice(
+        pred_1_repeat,
+        pred_2_repeat,
+        ignore_index=ignore_index if ignore_index == 0 else None,
+    )
+    gt_1_repeat = torch.repeat_interleave(ground_truth, ground_truth.shape[0], 0)
+    gt_2_repeat = ground_truth.repeat(
+        ground_truth.shape[0], *((ground_truth.ndim - 1) * [1])
+    )
+    if torch.any(gt_1_repeat == ignore_index):
+        dist_gt_gt_2 = 1 - dice(gt_1_repeat, gt_2_repeat, ignore_index=ignore_index)
+    else:
+        dist_gt_gt_2 = 1 - dice(gt_1_repeat, gt_2_repeat)
+    ged = 2 * dist_gt_pred_2 - dist_pred_pred_2 - dist_gt_gt_2
 
-    if ground_truth.shape[0] > 1:
+    if ground_truth.shape[0] > 1 and not ged_only:
         max_dice_rater = []
         for seg_idx in range(ground_truth.shape[0]):
             gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
@@ -360,8 +353,8 @@ def calculate_ged(
 
     # ged_v2 = ged + dist_mean
     ged_dict = {}
-    ged_dict["ged"] = ged
-    if ground_truth.shape[0] > 1:
+    ged_dict["ged"] = ged.item()
+    if ground_truth.shape[0] > 1 and not ged_only:
         for idx, rater_dist in enumerate(max_dice_rater):
             ged_dict["max dice rater {}".format(idx)] = rater_dist.item()
         ged_dict["max dice pred"] = min_over_preds.item()
@@ -462,17 +455,17 @@ def calculate_uncertainty(softmax_preds: torch.Tensor, ssn: bool = False):
     uncertainty_dict = {}
     # softmax_preds = torch.from_numpy(softmax_preds)
     mean_softmax = torch.mean(softmax_preds, dim=0)
-    pred_entropy = torch.zeros(*softmax_preds.shape[2:]).to(mean_softmax.device)
+    pred_entropy = torch.zeros(*softmax_preds.shape[2:], device=mean_softmax.device)
     for y in range(mean_softmax.shape[0]):
         pred_entropy_class = mean_softmax[y] * torch.log(mean_softmax[y])
         nan_pos = torch.isnan(pred_entropy_class)
         pred_entropy[~nan_pos] += pred_entropy_class[~nan_pos]
     pred_entropy *= -1
-    expected_entropy = torch.zeros(softmax_preds.shape[0], *softmax_preds.shape[2:]).to(
-        softmax_preds.device
+    expected_entropy = torch.zeros(
+        softmax_preds.shape[0], *softmax_preds.shape[2:], device=softmax_preds.device
     )
     for pred in range(softmax_preds.shape[0]):
-        entropy = torch.zeros(*softmax_preds.shape[2:]).to(softmax_preds.device)
+        entropy = torch.zeros(*softmax_preds.shape[2:], device=softmax_preds.device)
         for y in range(softmax_preds.shape[1]):
             entropy_class = softmax_preds[pred, y] * torch.log(softmax_preds[pred, y])
             nan_pos = torch.isnan(entropy_class)
