@@ -2,6 +2,7 @@ import fnmatch
 import os
 import pickle
 
+import albumentations
 import torch
 import numpy as np
 import cv2
@@ -17,6 +18,7 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         file_pattern: str = "*.npy",
         transforms=None,
         data_fold_id: int = 0,
+        tta: bool = False,
     ):
         self.splits_path = splits_path
         self.data_fold_id = data_fold_id
@@ -60,6 +62,7 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         self.datasets = [sample["dataset"] for sample in self.samples]
 
         self.transforms = transforms
+        self.tta = tta
         print(
             f"Dataset: Cityscape {split} - {len(self.imgs)} images - {len(self.masks)} masks",
         )
@@ -74,17 +77,42 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         #
         # mask = cv2.imread(self.masks[idx], -1)
 
-        # apply albumentations transforms
-        transformed = self.transforms(image=img, mask=mask)
-        img = transformed["image"]
-        mask = transformed["mask"]
+        if self.tta:
+            images = [img]
+            transforms = [[]]
+            flip_transform = albumentations.HorizontalFlip(p=1.0)
+            noise_transform = albumentations.GaussNoise(p=1.0)
+            flipped = flip_transform(image=img)
+            images.append(flipped["image"])
+            transforms.append(["HorizontalFlip"])
+            noise = noise_transform(image=img)
+            images.append(noise["image"])
+            transforms.append(["GaussNoise"])
+            flipped_noise = noise_transform(image=flipped["image"])
+            images.append(flipped_noise["image"])
+            transforms.append(["HorizontalFlip", "GaussNoise"])
+            images = [self.transforms(image=image)["image"].float() for image in images]
+            transformed = self.transforms(image=img, mask=mask)
+            mask = transformed["mask"]
+            return {
+                "data": images,
+                "seg": mask,
+                "image_id": self.image_ids[idx],
+                "dataset": self.datasets[idx],
+                "transforms": transforms,
+            }  # .long()
+        else:
+            # apply albumentations transforms
+            transformed = self.transforms(image=img, mask=mask)
+            img = transformed["image"]
+            mask = transformed["mask"]
 
-        return {
-            "data": img.float(),
-            "seg": mask,
-            "image_id": self.image_ids[idx],
-            "dataset": self.datasets[idx],
-        }  # .long()
+            return {
+                "data": img.float(),
+                "seg": mask,
+                "image_id": self.image_ids[idx],
+                "dataset": self.datasets[idx],
+            }  # .long()
 
     def __len__(self):
         return len(self.imgs)

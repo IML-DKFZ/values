@@ -2,6 +2,7 @@ import json
 import os
 from argparse import Namespace
 
+import albumentations
 import cv2
 import hydra
 import numpy as np
@@ -29,6 +30,7 @@ class Tester:
         set_seed(hparams["seed"])
         self.ignore_index = hparams["datamodule"]["ignore_index"]
         self.test_batch_size = args.test_batch_size
+        self.tta = args.tta
         self.test_dataloader = self.get_test_dataloader(args, hparams)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.models = load_models_from_checkpoint(
@@ -108,6 +110,7 @@ class Tester:
             augmentations=hparams["AUGMENTATIONS"],
             seed=hparams["seed"],
             test_split=args.test_split,
+            tta=self.tta,
             _recursive_=False,
         )
         dm.setup("test")
@@ -202,7 +205,7 @@ class Tester:
         )
         self.save_uncertainty(image_id, uncertainty_dict)
 
-    def process_output(self, all_preds):
+    def process_output(self, all_preds, is_ssn):
         pred_shape = all_preds["softmax_pred"].shape
         # The extra dimension is added to enable that torchmetrics can deal with ignore index outside of softmax dimensions
         extra_dimension = torch.zeros(
@@ -243,7 +246,7 @@ class Tester:
                 )
             )
             if image_preds.shape[0] > 1:
-                uncertainty_dict = calculate_uncertainty(image_preds)
+                uncertainty_dict = calculate_uncertainty(image_preds, ssn=is_ssn)
             else:
                 uncertainty_dict = calculate_one_minus_msr(image_preds.squeeze(0))
             ignore_index_map_image = ignore_index_map[image_idx][0].unsqueeze(-1)
@@ -296,13 +299,26 @@ class Tester:
                     for output_sample in output_samples:
                         output_softmax = F.softmax(output_sample, dim=1)
                         all_preds["softmax_pred"].append(output_softmax)
+                elif self.tta:
+                    for index, image in enumerate(batch["data"]):
+                        output = model.forward(image.to(self.device))
+                        output_softmax = F.softmax(output, dim=1)  # .to("cpu")
+                        if any(
+                            "HorizontalFlip" in sl for sl in batch["transforms"][index]
+                        ):
+                            # all_preds["softmax_pred"].append(output_softmax)
+                            all_preds["softmax_pred"].append(
+                                torch.flip(output_softmax, [-1])
+                            )
+                        else:
+                            all_preds["softmax_pred"].append(output_softmax)
                 else:
                     for pred in range(self.n_pred):
                         output = model.forward(batch["data"].to(self.device))
                         output_softmax = F.softmax(output, dim=1)  # .to("cpu")
                         all_preds["softmax_pred"].append(output_softmax)
             all_preds["softmax_pred"] = torch.stack(all_preds["softmax_pred"])
-            self.process_output(all_preds)
+            self.process_output(all_preds, is_ssn=self.models[0].ssn)
         self.save_results_dict()
 
 

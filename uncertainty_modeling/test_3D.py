@@ -106,6 +106,9 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         default="id",
         help="The key of the test split to use for prediction. If 'unlabeled', uses both, the id and ood unlabeled data",
     )
+    parser.add_argument(
+        "--test_time_augmentations", "-tta", dest="tta", action="store_true"
+    )
     # parser.add_argument("--id", dest="id", action="store_true")
     # parser.add_argument("--ood", dest="id", action="store_false")
     with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
