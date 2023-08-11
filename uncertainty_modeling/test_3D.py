@@ -16,6 +16,7 @@ from torchmetrics.functional import dice
 
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
+from batchgenerators.transforms.noise_transforms import GaussianNoiseTransform
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
 from uncertainty_modeling.models.ssn_unet3D_module import SsnUNet3D
@@ -409,6 +410,7 @@ def predict_cases(
     models: List[nn.Module],
     n_pred: int = 1,
     n_aleatoric_samples: int = 10,
+    tta: bool = False,
 ) -> DataCarrier3D:
     """
     Predict all test cases.
@@ -428,29 +430,64 @@ def predict_cases(
 
         pred_idx = 0
         for model in models:
-            model = model.double()
-            if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                n_pred = n_aleatoric_samples
-                mu, s = model.forward(input_tensor["data"].double())
-                sigma = torch.exp(s / 2)
-            for pred in range(n_pred):
+            model = model.double().to("cuda")
+            if tta:
+                input["data"] = input["data"].copy()
+                noise_to_tensor = Compose([GaussianNoiseTransform(), NumpyToTensor()])
+                input_noise_tensor = noise_to_tensor(**input)
+                flip_dims = [(2,), (3,), (4,), (2, 3), (2, 4), (3, 4), (2, 3, 4)]
+                sigma = None
+                n_pred = 2 * len(flip_dims) + 2
+                for x in [input_tensor["data"], input_noise_tensor["data"]]:
+                    output = model.forward(x.double().to("cuda"))
+                    output_softmax = F.softmax(output, dim=1).to("cpu")
+                    test_datacarrier.concat_data(
+                        batch=input_tensor,
+                        softmax_pred=output_softmax,
+                        n_pred=n_pred * len(models),
+                        pred_idx=pred_idx,
+                        sigma=sigma,
+                    )
+                    pred_idx += 1
+                    for flip_dim in flip_dims:
+                        output = torch.flip(
+                            model.forward(torch.flip(x.to("cuda"), flip_dim)), flip_dim
+                        )
+                        output_softmax = F.softmax(output, dim=1).to("cpu")
+                        test_datacarrier.concat_data(
+                            batch=input_tensor,
+                            softmax_pred=output_softmax,
+                            n_pred=n_pred * len(models),
+                            pred_idx=pred_idx,
+                            sigma=sigma,
+                        )
+                        pred_idx += 1
+            else:
                 if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                    epsilon = torch.randn(s.size())
-                    output = mu + sigma * epsilon
-                    output_softmax = F.softmax(output, dim=1)
-                else:
-                    output = model.forward(input_tensor["data"].double())
-                    output_softmax = F.softmax(output, dim=1)
-                    sigma = None
+                    n_pred = n_aleatoric_samples
+                    mu, s = model.forward(input_tensor["data"].double().to("cuda"))
+                    sigma = torch.exp(s / 2)
+                for pred in range(n_pred):
+                    if (
+                        hasattr(model, "aleatoric_loss")
+                        and model.aleatoric_loss == True
+                    ):
+                        epsilon = torch.randn(s.size())
+                        output = mu + sigma * epsilon
+                        output_softmax = F.softmax(output, dim=1)
+                    else:
+                        output = model.forward(input_tensor["data"].double().to("cuda"))
+                        output_softmax = F.softmax(output, dim=1)
+                        sigma = None
 
-                test_datacarrier.concat_data(
-                    batch=input_tensor,
-                    softmax_pred=output_softmax,
-                    n_pred=n_pred * len(models),
-                    pred_idx=pred_idx,
-                    sigma=sigma,
-                )
-                pred_idx += 1
+                    test_datacarrier.concat_data(
+                        batch=input_tensor,
+                        softmax_pred=output_softmax,
+                        n_pred=n_pred * len(models),
+                        pred_idx=pred_idx,
+                        sigma=sigma,
+                    )
+                    pred_idx += 1
     return test_datacarrier
 
 
@@ -528,7 +565,8 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                 / np.stack(
                     [np.clip(value["num_predictions"], 1, None)[0]]
                     * value["seg"].shape[0]
-                )
+                ),
+                dtype=np.intc,
             )
             softmax_pred = np.asarray(
                 value["softmax_pred"]
@@ -538,7 +576,8 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                 )
             )
             ged_dict = calculate_ged(
-                torch.from_numpy(softmax_pred), torch.from_numpy(gt)
+                torch.from_numpy(softmax_pred).to("cuda"),
+                torch.from_numpy(gt).to("cuda"),
             )
             metrics_dict.update(ged_dict)
         test_datacarrier.data[key]["metrics"] = metrics_dict
@@ -561,10 +600,11 @@ def save_results(
         if args.data_input_dir is not None
         else hparams["data_input_dir"]
     )
+    exp_name = hparams["exp_name"] if args.exp_name is None else args.exp_name
     if "shift_feature" in hparams["datamodule"]:
         test_datacarrier.save_data(
             root_dir=save_dir,
-            exp_name=hparams["exp_name"],
+            exp_name=exp_name,
             version=hparams["version"],
             org_data_path=os.path.join(data_input_dir, "images"),
             test_split=args.test_split,
@@ -582,7 +622,7 @@ def save_results(
             )
         test_datacarrier.save_data(
             root_dir=save_dir,
-            exp_name=hparams["exp_name"],
+            exp_name=exp_name,
             version=hparams["version"],
             org_data_path=org_data_path,
             test_split=args.test_split,
@@ -652,12 +692,13 @@ def run_test(args: Namespace) -> None:
             models,
             args.n_pred,
             hparams["n_aleatoric_samples"],
+            tta=args.tta,
         )
     else:
         test_datacarrier = predict_cases(
-            test_datacarrier, data_samples, models, args.n_pred
+            test_datacarrier, data_samples, models, args.n_pred, tta=args.tta
         )
-    if args.n_pred > 1 or len(models) > 1:
+    if args.n_pred > 1 or len(models) > 1 or args.tta:
         caculcate_uncertainty_multiple_pred(test_datacarrier, ssn)
     calculate_metrics(test_datacarrier)
     save_results(test_datacarrier, hparams, args)
