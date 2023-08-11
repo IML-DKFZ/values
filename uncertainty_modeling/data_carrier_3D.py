@@ -92,7 +92,7 @@ class DataCarrier3D:
                     sample["crop_idx"][2][0] : sample["crop_idx"][2][1],
                 ]
                 label_patches.append(label_patch)
-            label_patches = np.array(label_patches)
+            label_patches = np.array(label_patches, dtype=np.intc)
             input["seg"] = np.expand_dims(label_patches, 1)
         return input
 
@@ -130,7 +130,8 @@ class DataCarrier3D:
                 self.data[image_path]["data"] = np.zeros(batch["org_image_size"][index])
 
                 self.data[image_path]["seg"] = np.zeros(
-                    [len(batch["label_paths"][index]), *batch["org_image_size"][index]]
+                    [len(batch["label_paths"][index]), *batch["org_image_size"][index]],
+                    dtype=np.intc,
                 )
 
             crop_idx = batch["crop_idx"][index]
