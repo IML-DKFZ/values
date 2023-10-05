@@ -233,9 +233,10 @@ class LightningExperiment(pl.LightningModule):
         """
         target = batch["seg"].long().squeeze(1)
         # TODO: check if this works with all models
-        if (
-            type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D
-            or self.model.ssn
+        if type(
+            self.model
+        ) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D or (
+            hasattr(self.model, "ssn") and self.model.ssn
         ):
             loss = self.forward_ssn(batch, target)
         elif self.aleatoric_loss:
@@ -289,9 +290,10 @@ class LightningExperiment(pl.LightningModule):
             val_loss [torch.Tensor]: The computed loss
         """
         target = batch["seg"].long().squeeze(1)
-        if (
-            type(self.model) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D
-            or self.model.ssn
+        if type(
+            self.model
+        ) is uncertainty_modeling.models.ssn_unet3D_module.SsnUNet3D or (
+            hasattr(self.model, "ssn") and self.model.ssn
         ):
             val_loss, output, val_dice = self.forward_ssn(batch, target, val=True)
         elif self.aleatoric_loss:

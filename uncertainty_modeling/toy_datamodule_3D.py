@@ -13,6 +13,8 @@ from batchgenerators.dataloading.data_loader import DataLoader
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
+from batchgenerators.transforms.spatial_transforms import MirrorTransform
+from batchgenerators.transforms.noise_transforms import GaussianNoiseTransform
 from medpy.io import load
 from sklearn.model_selection import KFold
 
@@ -30,6 +32,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         patch_overlap: float = 1,
         num_workers: int = 8,
         seed: int = 42,
+        augment: bool = False,
         *args,
         **kwargs,
     ):
@@ -47,6 +50,7 @@ class ToyDataModule3D(pl.LightningDataModule):
         self.patch_overlap = patch_overlap
         self.num_workers = num_workers
         self.seed = seed
+        self.augment = augment
 
         # split keys are set in setup()
         self.tr_keys = None
@@ -239,9 +243,21 @@ class ToyDataModule3D(pl.LightningDataModule):
             num_raters=self.num_raters,
             patch_size=self.patch_size,
         )
+
+        if self.augment:
+            transforms = Compose(
+                [
+                    MirrorTransform(),
+                    GaussianNoiseTransform(),
+                    NumpyToTensor(cast_to="float"),
+                ]
+            )
+        else:
+            transforms = Compose([NumpyToTensor(cast_to="float")])
+
         train_augmenter = FixedLengthAugmenter(
             data_loader=train_loader,
-            transform=Compose([NumpyToTensor(cast_to="float")]),
+            transform=transforms,
             num_processes=self.num_workers,
             num_cached_per_queue=2,
             seeds=[self.seed] * self.num_workers,

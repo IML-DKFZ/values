@@ -125,6 +125,7 @@ class BaseDataModule(LightningDataModule):
         val_batch_size: int,
         num_workers: int,
         augmentations: DictConfig,
+        tta: bool = False,
         **kwargs,
     ) -> None:
         """
@@ -156,6 +157,7 @@ class BaseDataModule(LightningDataModule):
         # dataset which is defined in the config
         self.dataset = dataset
         self.test_split = kwargs.get("test_split", None)
+        self.tta = tta
 
     def setup(self, stage: str = None) -> None:
         """
@@ -185,6 +187,7 @@ class BaseDataModule(LightningDataModule):
                 base_dir=self.data_input_dir,
                 split="val",
                 transforms=transforms_val,
+                tta=self.tta,
             )
         if stage in (None, "test"):
             transforms_test = get_augmentations_from_config(self.augmentations.TEST)[0]
@@ -198,6 +201,7 @@ class BaseDataModule(LightningDataModule):
                 base_dir=self.data_input_dir,
                 split=test_split,
                 transforms=transforms_test,
+                tta=self.tta,
             )
 
     def max_steps(self) -> int:

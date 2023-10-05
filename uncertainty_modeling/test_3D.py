@@ -16,6 +16,7 @@ from torchmetrics.functional import dice
 
 from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.utility_transforms import NumpyToTensor
+from batchgenerators.transforms.noise_transforms import GaussianNoiseTransform
 
 from uncertainty_modeling.data_carrier_3D import DataCarrier3D
 from uncertainty_modeling.models.ssn_unet3D_module import SsnUNet3D
@@ -105,6 +106,9 @@ def test_cli(config_file: str = "configs/test_vnet_defaults.yml") -> Namespace:
         type=str,
         default="id",
         help="The key of the test split to use for prediction. If 'unlabeled', uses both, the id and ood unlabeled data",
+    )
+    parser.add_argument(
+        "--test_time_augmentations", "-tta", dest="tta", action="store_true"
     )
     # parser.add_argument("--id", dest="id", action="store_true")
     # parser.add_argument("--ood", dest="id", action="store_false")
@@ -286,49 +290,42 @@ def calculate_test_metrics(
 
 
 def calculate_ged(
-    output_softmax: torch.Tensor, ground_truth: torch.Tensor, ignore_index: int = 0
+    output_softmax: torch.Tensor,
+    ground_truth: torch.Tensor,
+    ignore_index: int = 0,
+    ged_only=False,
 ) -> Dict:
-    dist_gt_pred = []
-    for seg_idx in range(ground_truth.shape[0]):
-        gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
-        for pred_idx in range(output_softmax.shape[0]):
-            pred_softmax = torch.unsqueeze(output_softmax[pred_idx], 0).type(
-                torch.FloatTensor
-            )
-            dist = 1 - dice(pred_softmax, gt_seg, ignore_index=ignore_index)
-            dist_gt_pred.append(dist)
-    dist_pred_pred = []
-    for pred_idx_1 in range(output_softmax.shape[0]):
-        pred_softmax_1 = torch.unsqueeze(output_softmax[pred_idx_1], 0).type(
-            torch.FloatTensor
-        )
-        pred_1 = torch.argmax(pred_softmax_1, dim=1).type(torch.LongTensor)
-        for pred_idx_2 in range(output_softmax.shape[0]):
-            pred_softmax_2 = torch.unsqueeze(output_softmax[pred_idx_2], 0).type(
-                torch.FloatTensor
-            )
-            pred_2 = torch.argmax(pred_softmax_2, dim=1).type(torch.LongTensor)
-            # TODO: does this apply in all cases that we can simply set no ignore index between
-            #  predictions except when not including background (0)?
-            dist = 1 - dice(
-                pred_1, pred_2, ignore_index=ignore_index if ignore_index == 0 else None
-            )
-            dist_pred_pred.append(dist)
-    dist_gt_gt = []
-    for seg_idx_1 in range(ground_truth.shape[0]):
-        gt_seg_1 = torch.unsqueeze(ground_truth[seg_idx_1], 0).type(torch.LongTensor)
-        for seg_idx_2 in range(ground_truth.shape[0]):
-            gt_seg_2 = torch.unsqueeze(ground_truth[seg_idx_2], 0).type(
-                torch.LongTensor
-            )
-            if torch.any(gt_seg_1 == ignore_index):
-                dist = 1 - dice(gt_seg_1, gt_seg_2, ignore_index=ignore_index)
-            else:
-                dist = 1 - dice(gt_seg_1, gt_seg_2)
-            dist_gt_gt.append(dist)
-    ged = 2 * np.mean(dist_gt_pred) - np.mean(dist_pred_pred) - np.mean(dist_gt_gt)
+    gt_repeat = torch.repeat_interleave(ground_truth, output_softmax.shape[0], 0)
+    pred_repeat = output_softmax.repeat(
+        ground_truth.shape[0], *((output_softmax.ndim - 1) * [1])
+    )
+    dist_gt_pred_2 = 1 - dice(
+        pred_repeat,
+        gt_repeat,
+        ignore_index=ignore_index,
+    )
+    pred_1_repeat = torch.repeat_interleave(output_softmax, output_softmax.shape[0], 0)
+    pred_1_repeat = torch.argmax(pred_1_repeat, dim=1)
+    pred_2_repeat = output_softmax.repeat(
+        output_softmax.shape[0], *((output_softmax.ndim - 1) * [1])
+    )
+    pred_2_repeat = torch.argmax(pred_2_repeat, dim=1)
+    dist_pred_pred_2 = 1 - dice(
+        pred_1_repeat,
+        pred_2_repeat,
+        ignore_index=ignore_index if ignore_index == 0 else None,
+    )
+    gt_1_repeat = torch.repeat_interleave(ground_truth, ground_truth.shape[0], 0)
+    gt_2_repeat = ground_truth.repeat(
+        ground_truth.shape[0], *((ground_truth.ndim - 1) * [1])
+    )
+    if torch.any(gt_1_repeat == ignore_index):
+        dist_gt_gt_2 = 1 - dice(gt_1_repeat, gt_2_repeat, ignore_index=ignore_index)
+    else:
+        dist_gt_gt_2 = 1 - dice(gt_1_repeat, gt_2_repeat)
+    ged = 2 * dist_gt_pred_2 - dist_pred_pred_2 - dist_gt_gt_2
 
-    if ground_truth.shape[0] > 1:
+    if ground_truth.shape[0] > 1 and not ged_only:
         max_dice_rater = []
         for seg_idx in range(ground_truth.shape[0]):
             gt_seg = torch.unsqueeze(ground_truth[seg_idx], 0).type(torch.LongTensor)
@@ -360,8 +357,8 @@ def calculate_ged(
 
     # ged_v2 = ged + dist_mean
     ged_dict = {}
-    ged_dict["ged"] = ged
-    if ground_truth.shape[0] > 1:
+    ged_dict["ged"] = ged.item()
+    if ground_truth.shape[0] > 1 and not ged_only:
         for idx, rater_dist in enumerate(max_dice_rater):
             ged_dict["max dice rater {}".format(idx)] = rater_dist.item()
         ged_dict["max dice pred"] = min_over_preds.item()
@@ -413,6 +410,7 @@ def predict_cases(
     models: List[nn.Module],
     n_pred: int = 1,
     n_aleatoric_samples: int = 10,
+    tta: bool = False,
 ) -> DataCarrier3D:
     """
     Predict all test cases.
@@ -432,29 +430,64 @@ def predict_cases(
 
         pred_idx = 0
         for model in models:
-            model = model.double()
-            if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                n_pred = n_aleatoric_samples
-                mu, s = model.forward(input_tensor["data"].double())
-                sigma = torch.exp(s / 2)
-            for pred in range(n_pred):
+            model = model.double().to("cuda")
+            if tta:
+                input["data"] = input["data"].copy()
+                noise_to_tensor = Compose([GaussianNoiseTransform(), NumpyToTensor()])
+                input_noise_tensor = noise_to_tensor(**input)
+                flip_dims = [(2,), (3,), (4,), (2, 3), (2, 4), (3, 4), (2, 3, 4)]
+                sigma = None
+                n_pred = 2 * len(flip_dims) + 2
+                for x in [input_tensor["data"], input_noise_tensor["data"]]:
+                    output = model.forward(x.double().to("cuda"))
+                    output_softmax = F.softmax(output, dim=1).to("cpu")
+                    test_datacarrier.concat_data(
+                        batch=input_tensor,
+                        softmax_pred=output_softmax,
+                        n_pred=n_pred * len(models),
+                        pred_idx=pred_idx,
+                        sigma=sigma,
+                    )
+                    pred_idx += 1
+                    for flip_dim in flip_dims:
+                        output = torch.flip(
+                            model.forward(torch.flip(x.to("cuda"), flip_dim)), flip_dim
+                        )
+                        output_softmax = F.softmax(output, dim=1).to("cpu")
+                        test_datacarrier.concat_data(
+                            batch=input_tensor,
+                            softmax_pred=output_softmax,
+                            n_pred=n_pred * len(models),
+                            pred_idx=pred_idx,
+                            sigma=sigma,
+                        )
+                        pred_idx += 1
+            else:
                 if hasattr(model, "aleatoric_loss") and model.aleatoric_loss == True:
-                    epsilon = torch.randn(s.size())
-                    output = mu + sigma * epsilon
-                    output_softmax = F.softmax(output, dim=1)
-                else:
-                    output = model.forward(input_tensor["data"].double())
-                    output_softmax = F.softmax(output, dim=1)
-                    sigma = None
+                    n_pred = n_aleatoric_samples
+                    mu, s = model.forward(input_tensor["data"].double().to("cuda"))
+                    sigma = torch.exp(s / 2)
+                for pred in range(n_pred):
+                    if (
+                        hasattr(model, "aleatoric_loss")
+                        and model.aleatoric_loss == True
+                    ):
+                        epsilon = torch.randn(s.size())
+                        output = mu + sigma * epsilon
+                        output_softmax = F.softmax(output, dim=1)
+                    else:
+                        output = model.forward(input_tensor["data"].double().to("cuda"))
+                        output_softmax = F.softmax(output, dim=1)
+                        sigma = None
 
-                test_datacarrier.concat_data(
-                    batch=input_tensor,
-                    softmax_pred=output_softmax,
-                    n_pred=n_pred * len(models),
-                    pred_idx=pred_idx,
-                    sigma=sigma,
-                )
-                pred_idx += 1
+                    test_datacarrier.concat_data(
+                        batch=input_tensor,
+                        softmax_pred=output_softmax,
+                        n_pred=n_pred * len(models),
+                        pred_idx=pred_idx,
+                        sigma=sigma,
+                    )
+                    pred_idx += 1
     return test_datacarrier
 
 
@@ -462,17 +495,17 @@ def calculate_uncertainty(softmax_preds: torch.Tensor, ssn: bool = False):
     uncertainty_dict = {}
     # softmax_preds = torch.from_numpy(softmax_preds)
     mean_softmax = torch.mean(softmax_preds, dim=0)
-    pred_entropy = torch.zeros(*softmax_preds.shape[2:]).to(mean_softmax.device)
+    pred_entropy = torch.zeros(*softmax_preds.shape[2:], device=mean_softmax.device)
     for y in range(mean_softmax.shape[0]):
         pred_entropy_class = mean_softmax[y] * torch.log(mean_softmax[y])
         nan_pos = torch.isnan(pred_entropy_class)
         pred_entropy[~nan_pos] += pred_entropy_class[~nan_pos]
     pred_entropy *= -1
-    expected_entropy = torch.zeros(softmax_preds.shape[0], *softmax_preds.shape[2:]).to(
-        softmax_preds.device
+    expected_entropy = torch.zeros(
+        softmax_preds.shape[0], *softmax_preds.shape[2:], device=softmax_preds.device
     )
     for pred in range(softmax_preds.shape[0]):
-        entropy = torch.zeros(*softmax_preds.shape[2:]).to(softmax_preds.device)
+        entropy = torch.zeros(*softmax_preds.shape[2:], device=softmax_preds.device)
         for y in range(softmax_preds.shape[1]):
             entropy_class = softmax_preds[pred, y] * torch.log(softmax_preds[pred, y])
             nan_pos = torch.isnan(entropy_class)
@@ -532,7 +565,8 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                 / np.stack(
                     [np.clip(value["num_predictions"], 1, None)[0]]
                     * value["seg"].shape[0]
-                )
+                ),
+                dtype=np.intc,
             )
             softmax_pred = np.asarray(
                 value["softmax_pred"]
@@ -542,7 +576,8 @@ def calculate_metrics(test_datacarrier: DataCarrier3D) -> None:
                 )
             )
             ged_dict = calculate_ged(
-                torch.from_numpy(softmax_pred), torch.from_numpy(gt)
+                torch.from_numpy(softmax_pred).to("cuda"),
+                torch.from_numpy(gt).to("cuda"),
             )
             metrics_dict.update(ged_dict)
         test_datacarrier.data[key]["metrics"] = metrics_dict
@@ -565,10 +600,11 @@ def save_results(
         if args.data_input_dir is not None
         else hparams["data_input_dir"]
     )
+    exp_name = hparams["exp_name"] if args.exp_name is None else args.exp_name
     if "shift_feature" in hparams["datamodule"]:
         test_datacarrier.save_data(
             root_dir=save_dir,
-            exp_name=hparams["exp_name"],
+            exp_name=exp_name,
             version=hparams["version"],
             org_data_path=os.path.join(data_input_dir, "images"),
             test_split=args.test_split,
@@ -586,7 +622,7 @@ def save_results(
             )
         test_datacarrier.save_data(
             root_dir=save_dir,
-            exp_name=hparams["exp_name"],
+            exp_name=exp_name,
             version=hparams["version"],
             org_data_path=org_data_path,
             test_split=args.test_split,
@@ -656,12 +692,13 @@ def run_test(args: Namespace) -> None:
             models,
             args.n_pred,
             hparams["n_aleatoric_samples"],
+            tta=args.tta,
         )
     else:
         test_datacarrier = predict_cases(
-            test_datacarrier, data_samples, models, args.n_pred
+            test_datacarrier, data_samples, models, args.n_pred, tta=args.tta
         )
-    if args.n_pred > 1 or len(models) > 1:
+    if args.n_pred > 1 or len(models) > 1 or args.tta:
         caculcate_uncertainty_multiple_pred(test_datacarrier, ssn)
     calculate_metrics(test_datacarrier)
     save_results(test_datacarrier, hparams, args)
