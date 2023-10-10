@@ -1,0 +1,9 @@
+#@package _global_
+THRESHOLD:
+  datasets: ["val"]
+  accumulated: True
+  function:
+    _target_: evaluation.uncertainty_aggregation.find_threshold.get_foreground_quantile
+  postprocess_function:
+    _target_: evaluation.uncertainty_aggregation.find_threshold.save_foreground_quantiles
+    save_path: ${base_path}

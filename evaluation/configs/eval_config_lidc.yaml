@@ -1,34 +1,18 @@
+#@package _global_
 defaults:
   - _self_
   - eval_default_config
+  - tasks/threshold.yaml
+  - datasets/lidc
 base_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/FirstCycle"
 second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
-  iter_params:
-    shift: ["texture", "malignancy"]
-    pred_model: ["Softmax", "Dropout", "Ensemble", "TTA", "SSN"]
-    seed: ["123", "124", "125"]
-  fold: 0
-  rank: 5
+  - ${LIDC}
 
-prediction_models:
-  Softmax:
-    naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-    unc_types: ["pred_unc"]
-    aggregations: ["patch_level", "threshold"]
-  Dropout:
-    naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc"]
-    aggregations: ["patch_level", "threshold"]
-  Ensemble:
-    naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
-    aggregations: ["patch_level", "threshold"]
-  TTA:
-    naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
-    aggregations: [ "image_level", "patch_level" ]
-  SSN:
-    naming_scheme_version: "{shift}_fold{fold}_rank{rank}_seed{seed}"
-    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
-    aggregations: ["patch_level", "threshold"]
+tasks: ["threshold"]
+
+task_params:
+  threshold: ${THRESHOLD}
+  aggregation:
+    datasets: ["id", "ood", "unlabeled", "val"]
+

@@ -4,6 +4,8 @@ from pathlib import Path
 
 import hydra
 from experiment_version import ExperimentVersion
+from experiment_dataloader import ExperimentDataloader
+from pydantic.utils import deep_update
 
 
 class EvalExperiments:
@@ -14,38 +16,78 @@ class EvalExperiments:
             config.second_cycle_path if "second_cycle_path" in config.keys() else None
         )
         self.versions = self._init_versions(config)
+        self.tasks = config.tasks
+        self.config = config
         return
 
     def _init_versions(self, config):
         versions = []
-        filtered_config = [
-            [(key, v) for v in values]
-            for key, values in config.experiments.iter_params.items()
-        ]
-        for params in product(*filtered_config):
-            version_params = {i[0]: i[1] for i in params}
-            exp_config = dict(config.experiments)
-            exp_config.pop("iter_params")
-            version_params.update(exp_config)
-            version_params["base_path"] = self.base_path
-            version_params["second_cycle_path"] = self.second_cycle_path
-            version_params.update(
-                dict(config.prediction_models[version_params["pred_model"]])
-            )
-            exp_version = ExperimentVersion(**version_params)
-            versions.append(exp_version)
+        for experiment in config.experiments:
+            filtered_config = [
+                [(key, v) for v in values]
+                for key, values in experiment.iter_params.items()
+            ]
+            for params in product(*filtered_config):
+                version_params = {i[0]: i[1] for i in params}
+                exp_config = dict(experiment)
+                exp_config.pop("iter_params")
+                version_params.update(exp_config)
+                version_params["base_path"] = self.base_path
+                version_params["second_cycle_path"] = self.second_cycle_path
+                version_params.update(
+                    dict(experiment.prediction_models[version_params["pred_model"]])
+                )
+                exp_version = ExperimentVersion(**version_params)
+                versions.append(exp_version)
         return versions
 
-    def analyse(self):
+    def analyse_accumulated(self, task_params):
+        # This is only used if the results are accumulated across multiple versions
+        results_dict_task = {}
         for version in self.versions:
-            print(version.exp_path)
-            print(os.path.isdir(version.exp_path))
+            if "datasets" in task_params.keys():
+                dataset_splits = task_params["datasets"]
+            else:
+                dataset_splits = [None]
+            for dataset_split in dataset_splits:
+                exp_dataloader = ExperimentDataloader(version, dataset_split)
+                results_dict = hydra.utils.instantiate(
+                    task_params.function, exp_dataloader=exp_dataloader
+                )
+                results_dict_task = deep_update(results_dict_task, results_dict)
+        hydra.utils.instantiate(
+            task_params.postprocess_function, results_dict=results_dict_task
+        )
+
+    def analyse_single_version(self, task_params):
+        for version in self.versions:
+            if "datasets" in task_params.keys():
+                dataset_splits = task_params["datasets"]
+            else:
+                dataset_splits = [None]
+            for dataset_split in dataset_splits:
+                exp_dataloader = ExperimentDataloader(version, dataset_split)
+                hydra.utils.instantiate(
+                    task_params.function, exp_dataloader=exp_dataloader
+                )
+
+    def analyse(self):
+        for task in self.tasks:
+            task_params = self.config.task_params[task]
+            accumulated = (
+                task_params.accumulated
+                if "accumulated" in task_params.keys()
+                else False
+            )
+            if accumulated:
+                self.analyse_accumulated(task_params=task_params)
+            else:
+                self.analyse_single_version(task_params=task_params)
+            print(task)
         return
 
 
-@hydra.main(
-    config_path="configs", config_name="eval_config_toy_seed123", version_base=None
-)
+@hydra.main(config_path="configs", config_name="eval_config_lidc", version_base=None)
 def main(eval_config):
     evaluator = EvalExperiments(eval_config)
     evaluator.analyse()

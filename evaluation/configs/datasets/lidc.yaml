@@ -1,0 +1,32 @@
+#@package _global_
+LIDC:
+  iter_params:
+    shift: [ "texture", "malignancy" ]
+    pred_model: [ "Softmax", "Dropout", "Ensemble", "TTA", "SSN" ]
+    seed: [ "123", "124", "125" ]
+  fold: 0
+  rank: 5
+  image_ending: ".nii.gz"
+  unc_ending: ".nii.gz"
+
+  prediction_models:
+    Softmax:
+      naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
+      unc_types: [ "pred_unc" ]
+      aggregations: [ "patch_level", "threshold" ]
+    Dropout:
+      naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
+      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      aggregations: [ "patch_level", "threshold" ]
+    Ensemble:
+      naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
+      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      aggregations: [ "patch_level", "threshold" ]
+    TTA:
+      naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
+      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      aggregations: [ "image_level", "patch_level" ]
+    SSN:
+      naming_scheme_version: "{shift}_fold{fold}_rank{rank}_seed{seed}"
+      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      aggregations: [ "patch_level", "threshold" ]

@@ -5,11 +5,12 @@ class ExperimentVersion:
         second_cycle_path,
         naming_scheme_version,
         pred_model,
-        unc_types,
-        aggregations,
+        image_ending,
+        unc_ending,
         naming_scheme_pred_model="{pred_model}",
         **kwargs
     ):
+        self.pred_model = pred_model
         self.version_name = self._build_version_name(
             naming_scheme_version=naming_scheme_version, **kwargs
         )
@@ -19,7 +20,8 @@ class ExperimentVersion:
             / "test_results"
             / self.version_name
         )
-        return
+        self.image_ending = image_ending
+        self.unc_ending = unc_ending
 
     def _build_version_name(self, naming_scheme_version: str, **kwargs):
         return naming_scheme_version.format(**kwargs)
