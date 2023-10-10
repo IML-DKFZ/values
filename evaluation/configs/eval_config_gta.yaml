@@ -1,0 +1,33 @@
+defaults:
+  - _self_
+  - eval_default_config
+base_path: "/nvme/GTA/Experiments/FirstCycle"
+second_cycle_path: "/nvme/GTA/Experiments/SecondCycle"
+experiments:
+  iter_params:
+    pred_model: ["Softmax", "Dropout-Final", "Ensemble", "TTA", "SSN"]
+    seed: ["123", "124", "125"]
+  fold: 0
+  rank: 10
+
+prediction_models:
+  Softmax:
+    naming_scheme_version: "fold{fold}_seed{seed}"
+    unc_types: ["pred_unc"]
+    aggregations: ["image_level", "patch_level"]
+  Dropout-Final:
+    naming_scheme_version: "fold{fold}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc"]
+    aggregations: [ "image_level", "patch_level" ]
+  Ensemble:
+    naming_scheme_version: "fold{fold}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: [ "image_level", "patch_level" ]
+  TTA:
+    naming_scheme_version: "fold{fold}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: [ "image_level", "patch_level" ]
+  SSN:
+    naming_scheme_version: "rank{rank}_fold{fold}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: [ "image_level", "patch_level" ]

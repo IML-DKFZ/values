@@ -1,0 +1,36 @@
+defaults:
+  - _self_
+  - eval_default_config
+base_path: "/home/kckahl/Uncertainty/ToyExperiment"
+experiments:
+  iter_params:
+    pred_model: ["Softmax", "Dropout", "Ensemble", "TTA", "SSN"]
+    seed: ["128", "158"]
+  naming_scheme_pred_model: "{pred_model}-Case-{case}"
+  case: 1
+  fold: 0
+  epochs: 150
+  rank: 5
+  pretrain: 5
+
+prediction_models:
+  Softmax:
+    naming_scheme_version: "epochs{epochs}_seed{seed}"
+    unc_types: ["pred_unc"]
+    aggregations: ["patch_level", "threshold"]
+  Dropout:
+    naming_scheme_version: "epochs{epochs}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc"]
+    aggregations: ["patch_level", "threshold"]
+  Ensemble:
+    naming_scheme_version: "epochs{epochs}_fold{fold}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: ["patch_level", "threshold"]
+  TTA:
+    naming_scheme_version: "epochs{epochs}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: ["patch_level", "threshold"]
+  SSN:
+    naming_scheme_version: "epochs{epochs}_rank{rank}_pretrain{pretrain}_seed{seed}"
+    unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+    aggregations: ["patch_level", "threshold"]
