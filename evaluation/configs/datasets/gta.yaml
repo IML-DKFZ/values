@@ -5,25 +5,26 @@ GTA:
     seed: [ "123", "124", "125" ]
   fold: 0
   rank: 10
+  n_classes: 19
 
   prediction_models:
     Softmax:
       naming_scheme_version: "fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc" ]
+      unc_types: [ "predictive_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]
     Dropout-Final:
       naming_scheme_version: "fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]
     Ensemble:
       naming_scheme_version: "fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]
     TTA:
       naming_scheme_version: "fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]
     SSN:
       naming_scheme_version: "rank{rank}_fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]

@@ -12,21 +12,21 @@ LIDC:
   prediction_models:
     Softmax:
       naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc" ]
+      unc_types: [ "predictive_uncertainty" ]
       aggregations: [ "patch_level", "threshold" ]
     Dropout:
       naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "patch_level", "threshold" ]
     Ensemble:
       naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "patch_level", "threshold" ]
     TTA:
       naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "image_level", "patch_level" ]
     SSN:
       naming_scheme_version: "{shift}_fold{fold}_rank{rank}_seed{seed}"
-      unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
+      unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
       aggregations: [ "patch_level", "threshold" ]

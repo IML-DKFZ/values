@@ -12,6 +12,8 @@ experiments:
 tasks: ["threshold"]
 
 task_params:
-  threshold: ${THRESHOLD}
+  threshold:
+  - ${QUANTILE}
+  - ${THRESHOLD}
   aggregation:
     datasets: ["id", "ood", "unlabeled", "val"]

@@ -2,6 +2,8 @@ from itertools import product
 from pathlib import Path
 
 import hydra
+from omegaconf import ListConfig
+
 from experiment_version import ExperimentVersion
 from experiment_dataloader import ExperimentDataloader
 from pydantic.utils import deep_update
@@ -70,19 +72,34 @@ class EvalExperiments:
                     task_params.function, exp_dataloader=exp_dataloader
                 )
 
-    def analyse(self):
-        for task in self.tasks:
-            task_params = self.config.task_params[task]
+    def analyse_subtasks(self, tasks):
+        for subtask_params in tasks:
             accumulated = (
-                task_params.accumulated
-                if "accumulated" in task_params.keys()
+                subtask_params.accumulated
+                if "accumulated" in subtask_params.keys()
                 else False
             )
             if accumulated:
-                self.analyse_accumulated(task_params=task_params)
+                self.analyse_accumulated(task_params=subtask_params)
             else:
-                self.analyse_single_version(task_params=task_params)
-            print(task)
+                self.analyse_single_version(task_params=subtask_params)
+
+    def analyse(self):
+        for task in self.tasks:
+            task_params = self.config.task_params[task]
+            if type(self.config.task_params[task]) == ListConfig:
+                self.analyse_subtasks(task_params)
+            else:
+                accumulated = (
+                    task_params.accumulated
+                    if "accumulated" in task_params.keys()
+                    else False
+                )
+                if accumulated:
+                    self.analyse_accumulated(task_params=task_params)
+                else:
+                    self.analyse_single_version(task_params=task_params)
+                print(task)
         return
 
 

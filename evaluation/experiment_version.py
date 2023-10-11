@@ -7,6 +7,8 @@ class ExperimentVersion:
         pred_model,
         image_ending,
         unc_ending,
+        unc_types,
+        n_classes=2,
         naming_scheme_pred_model="{pred_model}",
         **kwargs
     ):
@@ -22,6 +24,8 @@ class ExperimentVersion:
         )
         self.image_ending = image_ending
         self.unc_ending = unc_ending
+        self.n_classes = n_classes
+        self.unc_types = unc_types
 
     def _build_version_name(self, naming_scheme_version: str, **kwargs):
         return naming_scheme_version.format(**kwargs)
