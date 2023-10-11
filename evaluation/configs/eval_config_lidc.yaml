@@ -3,18 +3,18 @@ defaults:
   - _self_
   - datasets/lidc
   - tasks/threshold
+  - tasks/aggregation_patch_thresh
 
 base_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/FirstCycle"
 second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["threshold"]
+tasks: ["aggregation"]
 
 task_params:
   threshold:
     - ${QUANTILE}
     - ${THRESHOLD}
-  aggregation:
-    datasets: ["id", "ood", "unlabeled", "val"]
+  aggregation: ${AGG_PATCH_THRESH}
 

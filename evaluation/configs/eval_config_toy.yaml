@@ -3,17 +3,17 @@ defaults:
   - datasets/toy
   - datasets/toy_seed123
   - tasks/threshold
+  - tasks/aggregation_patch_thresh
 
 base_path: "/home/kckahl/Uncertainty/ToyExperimentOOD/AleatoricTrain"
 experiments:
   - ${TOY}
   - ${TOY_SEED123}
 
-tasks: ["threshold"]
+tasks: ["aggregation"]
 
 task_params:
   threshold:
   - ${QUANTILE}
   - ${THRESHOLD}
-  aggregation:
-    datasets: ["id", "ood", "unlabeled", "val"]
+  aggregation: ${AGG_PATCH_THRESH}

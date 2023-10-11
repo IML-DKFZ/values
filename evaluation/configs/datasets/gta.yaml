@@ -6,6 +6,8 @@ GTA:
   fold: 0
   rank: 10
   n_classes: 19
+  image_ending: ".png"
+  unc_ending: ".tif"
 
   prediction_models:
     Softmax:

@@ -1,0 +1,12 @@
+#@package _global_
+defaults:
+  - aggregation_defaults@AGG_PATCH_THRESH
+AGG_PATCH_THRESH:
+  function:
+    aggregations:
+      patch_level:
+        _target_: evaluation.uncertainty_aggregation.aggregate_uncertainties.patch_level_aggregation
+        patch_size: 10
+      threshold:
+        _target_: evaluation.uncertainty_aggregation.aggregate_uncertainties.threshold_aggregation
+        threshold_path: ${base_path}/threshold_analysis.json

@@ -53,11 +53,15 @@ class EvalExperiments:
             for dataset_split in dataset_splits:
                 exp_dataloader = ExperimentDataloader(version, dataset_split)
                 results_dict = hydra.utils.instantiate(
-                    task_params.function, exp_dataloader=exp_dataloader
+                    task_params.function,
+                    exp_dataloader=exp_dataloader,
+                    _recursive_=False,
                 )
                 results_dict_task = deep_update(results_dict_task, results_dict)
         hydra.utils.instantiate(
-            task_params.postprocess_function, results_dict=results_dict_task
+            task_params.postprocess_function,
+            results_dict=results_dict_task,
+            _recursive_=False,
         )
 
     def analyse_single_version(self, task_params):
@@ -69,7 +73,9 @@ class EvalExperiments:
             for dataset_split in dataset_splits:
                 exp_dataloader = ExperimentDataloader(version, dataset_split)
                 hydra.utils.instantiate(
-                    task_params.function, exp_dataloader=exp_dataloader
+                    task_params.function,
+                    exp_dataloader=exp_dataloader,
+                    _recursive_=False,
                 )
 
     def analyse_subtasks(self, tasks):

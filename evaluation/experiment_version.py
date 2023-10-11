@@ -16,6 +16,7 @@ class ExperimentVersion:
         self.version_name = self._build_version_name(
             naming_scheme_version=naming_scheme_version, **kwargs
         )
+        self.base_path = base_path
         self.exp_path = (
             base_path
             / naming_scheme_pred_model.format(pred_model=pred_model, **kwargs)

@@ -1,0 +1,11 @@
+#@package _global_
+defaults:
+  - aggregation_defaults@AGG_PATCH_IMAGE
+AGG_PATCH_IMAGE:
+  function:
+    aggregations:
+      patch_level:
+        _target_: evaluation.uncertainty_aggregation.aggregate_uncertainties.patch_level_aggregation
+        patch_size: 10
+      image_level:
+        _target_: evaluation.uncertainty_aggregation.aggregate_uncertainties.image_level_aggregation

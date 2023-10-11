@@ -21,7 +21,7 @@ class ExperimentDataloader:
             if os.path.exists(self.dataset_path / "pred_prob")
             else None
         )
-        self.image_ids = self._get_image_ids()
+        self.image_ids = sorted(self._get_image_ids())
         if self.exp_version.pred_model == "Softmax":
             self._setup_pred_entropy_softmax()
         self.unc_path_dict = self._setup_unc_path_dict()
