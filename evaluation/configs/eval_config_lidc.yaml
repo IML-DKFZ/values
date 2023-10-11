@@ -1,9 +1,9 @@
 #@package _global_
 defaults:
   - _self_
-  - eval_default_config
-  - tasks/threshold.yaml
   - datasets/lidc
+  - tasks/threshold
+
 base_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/FirstCycle"
 second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:

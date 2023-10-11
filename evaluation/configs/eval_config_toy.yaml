@@ -1,9 +1,9 @@
 defaults:
   - _self_
-  - eval_default_config
-  - tasks/threshold.yaml
   - datasets/toy
   - datasets/toy_seed123
+  - tasks/threshold
+
 base_path: "/home/kckahl/Uncertainty/ToyExperimentOOD/AleatoricTrain"
 experiments:
   - ${TOY}

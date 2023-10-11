@@ -1,9 +1,8 @@
 #@package _global_
 TOY:
   iter_params:
-    pred_model: [ "Softmax", "Dropout", "Ensemble", "TTA" ]#, "SSN"]
+    pred_model: [ "Softmax", "Dropout", "Ensemble", "TTA", "SSN"]
     seed: [ "128", "158" ]
-  naming_scheme_pred_model: "{pred_model}-Case-{case}"
   case: 3
   fold: 0
   epochs: 150
@@ -14,22 +13,27 @@ TOY:
 
   prediction_models:
     Softmax:
+      naming_scheme_pred_model: "{pred_model}-Case-{case}"
       naming_scheme_version: "epochs{epochs}_seed{seed}"
       unc_types: ["pred_unc"]
       aggregations: ["patch_level", "threshold"]
     Dropout:
+      naming_scheme_pred_model: "{pred_model}-Case-{case}"
       naming_scheme_version: "epochs{epochs}_seed{seed}"
       unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc"]
       aggregations: ["patch_level", "threshold"]
     Ensemble:
+      naming_scheme_pred_model: "{pred_model}-Case-{case}"
       naming_scheme_version: "epochs{epochs}_fold{fold}_seed{seed}"
       unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
       aggregations: ["patch_level", "threshold"]
     TTA:
+      naming_scheme_pred_model: "{pred_model}-Case-{case}"
       naming_scheme_version: "epochs{epochs}_seed{seed}"
       unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
       aggregations: ["patch_level", "threshold"]
     SSN:
+      naming_scheme_pred_model: "{pred_model}-Case-{case}-gradient-clip"
       naming_scheme_version: "epochs{epochs}_rank{rank}_pretrain{pretrain}_seed{seed}"
       unc_types: [ "pred_unc", "aleatoric_unc", "epistemic_unc" ]
       aggregations: ["patch_level", "threshold"]

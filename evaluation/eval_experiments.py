@@ -1,4 +1,3 @@
-import os.path
 from itertools import product
 from pathlib import Path
 
