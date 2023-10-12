@@ -7,7 +7,7 @@ second_cycle_path: "/nvme/GTA/Experiments/SecondCycle"
 experiments:
   - ${GTA}
 
-tasks: ["second_cycle_splits"]
+tasks: ["second_cycle_splits_random"]
 
 task_params:
   aggregation: ${AGG_PATCH_IMAGE}
@@ -16,3 +16,9 @@ task_params:
     function:
       _target_: evaluation.split_file_generation.split_files_second_cycle.generate_split_file
       base_splits_path: "/nvme/GTA/splits/"
+  second_cycle_splits_random:
+    datasets: [ "unlabeled" ]
+    function:
+      _target_: evaluation.split_file_generation.split_files_second_cycle_random.generate_split_file
+      base_splits_path: "/nvme/GTA/splits/"
+      random_types: [ "random" ]
