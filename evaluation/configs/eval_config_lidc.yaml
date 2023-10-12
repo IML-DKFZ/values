@@ -10,11 +10,16 @@ second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["aggregation"]
+tasks: ["second_cycle_splits"]
 
 task_params:
   threshold:
     - ${QUANTILE}
     - ${THRESHOLD}
   aggregation: ${AGG_PATCH_THRESH}
+  second_cycle_splits:
+    datasets: ["unlabeled"]
+    function:
+      _target_: evaluation.split_file_generation.split_files_second_cycle.generate_split_file
+      base_splits_path: "/home/kckahl/LIDC-IDRI/CroppedData/splits"
 

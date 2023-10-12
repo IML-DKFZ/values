@@ -82,3 +82,12 @@ class ExperimentDataloader:
             image, _ = load(image_path)
             pred_segs.append(image)
         return pred_segs
+
+    def get_aggregated_unc_files_dict(self):
+        aggregated_unc_file_dict = {}
+        for unc in self.unc_path_dict.keys():
+            if os.path.isfile(self.dataset_path / f"aggregated_{unc}.json"):
+                aggregated_unc_file_dict[unc] = (
+                    self.dataset_path / f"aggregated_{unc}.json"
+                )
+        return aggregated_unc_file_dict
