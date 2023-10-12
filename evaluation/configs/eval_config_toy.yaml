@@ -10,10 +10,14 @@ experiments:
   - ${TOY}
   - ${TOY_SEED123}
 
-tasks: ["aggregation"]
+tasks: ["ood_detection"]
 
 task_params:
   threshold:
   - ${QUANTILE}
   - ${THRESHOLD}
   aggregation: ${AGG_PATCH_THRESH}
+  ood_detection:
+    datasets: [ "ood" ]
+    function:
+      _target_: evaluation.metrics.auroc.ood_detection

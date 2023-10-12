@@ -14,6 +14,7 @@ class ExperimentVersion:
         **kwargs
     ):
         self.pred_model = pred_model
+        self.naming_scheme_pred_model = naming_scheme_pred_model
         self.version_name = self._build_version_name(
             naming_scheme_version=naming_scheme_version, **kwargs
         )

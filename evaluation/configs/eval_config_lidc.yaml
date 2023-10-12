@@ -10,7 +10,7 @@ second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["second_cycle_splits_random"]
+tasks: ["ood_detection"]
 
 task_params:
   threshold:
@@ -28,4 +28,9 @@ task_params:
       _target_: evaluation.split_file_generation.split_files_second_cycle_random.generate_split_file
       base_splits_path: "/home/kckahl/LIDC-IDRI/CroppedData/splits"
       random_types: ["random", "best", "worst"]
+  ood_detection:
+    datasets: ["unlabeled"]
+    function:
+      _target_: evaluation.metrics.auroc.ood_detection
+      base_splits_path: "/home/kckahl/LIDC-IDRI/CroppedData/splits"
 
