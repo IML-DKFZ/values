@@ -2,12 +2,14 @@ defaults:
   - _self_
   - datasets/gta
   - tasks/aggregation_patch_image
+  - tasks/failure_detection
+
 base_path: "/nvme/GTA/Experiments/FirstCycle"
 second_cycle_path: "/nvme/GTA/Experiments/SecondCycle"
 experiments:
   - ${GTA}
 
-tasks: ["ood_detection"]
+tasks: ["failure_detection"]
 
 task_params:
   aggregation: ${AGG_PATCH_IMAGE}
@@ -27,3 +29,4 @@ task_params:
     function:
       _target_: evaluation.metrics.auroc.ood_detection
       base_splits_path: "/nvme/GTA/splits/"
+  failure_detection: ${FAILURE_DETECTION}

@@ -4,13 +4,14 @@ defaults:
   - datasets/lidc
   - tasks/threshold
   - tasks/aggregation_patch_thresh
+  - tasks/failure_detection
 
 base_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/FirstCycle"
 second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["ood_detection"]
+tasks: ["failure_detection"]
 
 task_params:
   threshold:
@@ -33,4 +34,5 @@ task_params:
     function:
       _target_: evaluation.metrics.auroc.ood_detection
       base_splits_path: "/home/kckahl/LIDC-IDRI/CroppedData/splits"
+  failure_detection: ${FAILURE_DETECTION}
 
