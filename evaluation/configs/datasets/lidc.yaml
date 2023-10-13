@@ -8,6 +8,7 @@ LIDC:
   rank: 5
   image_ending: ".nii.gz"
   unc_ending: ".nii.gz"
+  n_reference_segs: 4
 
   prediction_models:
     Softmax:

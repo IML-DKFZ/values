@@ -1,4 +1,22 @@
 #@package _global_
+defaults:
+  - /../../uncertainty_modeling/configs/datamodule/gta_torch_config@GTA.datamodule_config
+  - /../../uncertainty_modeling/configs/data_augmentations/tta_augmentations
+  - _self_
+
+AUGMENTATIONS:
+  TEST:
+    - Compose:
+        transforms:
+          - Normalize:
+              mean: ${AUGMENTATIONS.mean}
+              std: ${AUGMENTATIONS.std}
+          - StochasticLabelSwitches:
+              always_apply: True
+              p: 1.0
+              n_reference_samples: ${GTA.n_reference_segs}
+          - ToTensorV2:
+
 GTA:
   iter_params:
     pred_model: [ "Softmax", "Dropout-Final", "Ensemble", "TTA", "SSN" ]
@@ -8,6 +26,11 @@ GTA:
   n_classes: 19
   image_ending: ".png"
   unc_ending: ".tif"
+  datamodule_config:
+    data_input_dir: "/nvme/GTA"
+  n_reference_segs: 5
+  pred_seg_loading:
+    _target_: evaluation.utils.gta.pred_seg_loading
 
   prediction_models:
     Softmax:

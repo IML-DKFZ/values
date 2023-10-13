@@ -9,7 +9,7 @@ second_cycle_path: "/nvme/GTA/Experiments/SecondCycle"
 experiments:
   - ${GTA}
 
-tasks: ["failure_detection"]
+tasks: ["calibration"]
 
 task_params:
   aggregation: ${AGG_PATCH_IMAGE}
@@ -30,3 +30,7 @@ task_params:
       _target_: evaluation.metrics.auroc.ood_detection
       base_splits_path: "/nvme/GTA/splits/"
   failure_detection: ${FAILURE_DETECTION}
+  calibration:
+    datasets: ["id", "ood"]
+    function:
+      _target_: evaluation.metrics.ace.main

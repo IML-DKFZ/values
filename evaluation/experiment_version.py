@@ -9,8 +9,11 @@ class ExperimentVersion:
         unc_ending,
         unc_types,
         aggregations,
+        n_reference_segs,
         n_classes=2,
         naming_scheme_pred_model="{pred_model}",
+        datamodule_config=None,
+        pred_seg_loading=None,
         **kwargs
     ):
         self.pred_model = pred_model
@@ -27,9 +30,12 @@ class ExperimentVersion:
         )
         self.image_ending = image_ending
         self.unc_ending = unc_ending
+        self.n_reference_segs = n_reference_segs
         self.n_classes = n_classes
         self.unc_types = unc_types
         self.aggregations = aggregations
+        self.datamodule_config = datamodule_config
+        self.pred_seg_loading = pred_seg_loading
         self.version_params = kwargs
 
     def _build_version_name(self, naming_scheme_version: str, **kwargs):
