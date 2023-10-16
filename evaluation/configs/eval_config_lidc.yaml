@@ -11,7 +11,7 @@ second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["calibration"]
+tasks: ["ambiguity_modeling"]
 
 task_params:
   threshold:
@@ -39,4 +39,8 @@ task_params:
     datasets: [ "id", "ood" ]
     function:
       _target_: evaluation.metrics.ace.main
+  ambiguity_modeling:
+    datasets: [ "id", "ood" ]
+    function:
+      _target_: evaluation.metrics.ncc.main
 

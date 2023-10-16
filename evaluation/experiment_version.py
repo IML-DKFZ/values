@@ -14,6 +14,7 @@ class ExperimentVersion:
         naming_scheme_pred_model="{pred_model}",
         datamodule_config=None,
         pred_seg_loading=None,
+        gt_unc_map_loading=None,
         **kwargs
     ):
         self.pred_model = pred_model
@@ -36,6 +37,7 @@ class ExperimentVersion:
         self.aggregations = aggregations
         self.datamodule_config = datamodule_config
         self.pred_seg_loading = pred_seg_loading
+        self.gt_unc_map_loading = gt_unc_map_loading
         self.version_params = kwargs
 
     def _build_version_name(self, naming_scheme_version: str, **kwargs):

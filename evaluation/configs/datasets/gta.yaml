@@ -31,6 +31,8 @@ GTA:
   n_reference_segs: 5
   pred_seg_loading:
     _target_: evaluation.utils.gta.pred_seg_loading
+  gt_unc_map_loading:
+    _target_: evaluation.utils.gta.gt_unc_map
 
   prediction_models:
     Softmax:

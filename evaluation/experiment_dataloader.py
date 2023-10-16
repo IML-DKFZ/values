@@ -127,6 +127,27 @@ class ExperimentDataloader:
                 reference_segs.append(reference_seg)
             return np.array(reference_segs)
 
+    def get_gt_unc_map(self, image_id):
+        if self.exp_version.gt_unc_map_loading is None:
+            n_reference_segs = self.exp_version.n_reference_segs
+            reference_segs_paths = [
+                self.ref_seg_dir / f"{image_id}_{i:02d}{self.exp_version.image_ending}"
+                for i in range(n_reference_segs)
+            ]
+            reference_segs = []
+            for reference_seg_path in reference_segs_paths:
+                reference_seg, _ = load(reference_seg_path)
+                reference_segs.append(reference_seg)
+            reference_segs = np.array(reference_segs)
+            per_pixel_variance = np.var(reference_segs, axis=0)
+        else:
+            per_pixel_variance = hydra.utils.instantiate(
+                self.exp_version.gt_unc_map_loading,
+                image_id=image_id,
+                dataloader=self.dataloader,
+            )
+        return per_pixel_variance
+
     def get_mean_pred_seg(self, image_id):
         pred_seg_path = (
             self.pred_seg_dir
