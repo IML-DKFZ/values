@@ -34,3 +34,4 @@ task_params:
     datasets: ["id", "ood"]
     function:
       _target_: evaluation.metrics.ace.main
+      ignore_value: 255
