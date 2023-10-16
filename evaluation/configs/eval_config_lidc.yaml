@@ -7,11 +7,11 @@ defaults:
   - tasks/failure_detection
 
 base_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/FirstCycle"
-second_cycle_path: "/home/kckahl/LIDC-IDRI/ActiveLearning/SecondCycle"
+second_cycle_path: "/home/kckahl/E130-Personal/Kahl/LIDC-IDRI/ActiveLearning/SecondCycle"
 experiments:
   - ${LIDC}
 
-tasks: ["ambiguity_modeling"]
+tasks: ["al_improvement"]
 
 task_params:
   threshold:
@@ -43,4 +43,8 @@ task_params:
     datasets: [ "id", "ood" ]
     function:
       _target_: evaluation.metrics.ncc.main
+  al_improvement:
+    datasets: ["ood"]
+    function:
+      _target_: evaluation.metrics.al_improvement.main
 

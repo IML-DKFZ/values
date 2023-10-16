@@ -26,7 +26,7 @@ LIDC:
     TTA:
       naming_scheme_version: "{shift}_fold{fold}_seed{seed}"
       unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]
-      aggregations: [ "image_level", "patch_level" ]
+      aggregations: [ "patch_level", "threshold" ]
     SSN:
       naming_scheme_version: "{shift}_fold{fold}_rank{rank}_seed{seed}"
       unc_types: [ "predictive_uncertainty", "aleatoric_uncertainty", "epistemic_uncertainty" ]

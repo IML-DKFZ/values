@@ -9,7 +9,7 @@ second_cycle_path: "/nvme/GTA/Experiments/SecondCycle"
 experiments:
   - ${GTA}
 
-tasks: ["ambiguity_modeling"]
+tasks: ["al_improvement"]
 
 task_params:
   aggregation: ${AGG_PATCH_IMAGE}
@@ -39,3 +39,7 @@ task_params:
     datasets: [ "id", "ood" ]
     function:
       _target_: evaluation.metrics.ncc.main
+  al_improvement:
+    datasets: [ "ood" ]
+    function:
+      _target_: evaluation.metrics.al_improvement.main

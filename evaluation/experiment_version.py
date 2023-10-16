@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 class ExperimentVersion:
     def __init__(
         self,
@@ -29,6 +32,7 @@ class ExperimentVersion:
             / "test_results"
             / self.version_name
         )
+        self.second_cycle_path = Path(second_cycle_path)
         self.image_ending = image_ending
         self.unc_ending = unc_ending
         self.n_reference_segs = n_reference_segs
