@@ -33,7 +33,9 @@ def platt_scale_params(val_exp_dataloader: ExperimentDataloader, ignore_value=No
             ps_params_dict[unc_type]["b"].append(b)
         ps_params_dict[unc_type]["a"] = np.mean(np.array(ps_params_dict[unc_type]["a"]))
         ps_params_dict[unc_type]["b"] = np.mean(np.array(ps_params_dict[unc_type]["b"]))
-    with open(val_exp_dataloader.exp_version.exp_path / "platt_scale_params.json", "w") as f:
+    with open(
+        val_exp_dataloader.exp_version.exp_path / "platt_scale_params.json", "w"
+    ) as f:
         json.dump(ps_params_dict, f, indent=2)
 
 
@@ -131,7 +133,9 @@ def calibration_error(exp_dataloader: ExperimentDataloader, ignore_value=None):
 
 
 def main(exp_dataloader: ExperimentDataloader, ignore_value=None):
-    platt_scale_params_file = exp_dataloader.exp_version.exp_path / "platt_scale_params.json"
+    platt_scale_params_file = (
+        exp_dataloader.exp_version.exp_path / "platt_scale_params.json"
+    )
     # replace by checking whether platt scale params file exists
     if not os.path.isfile(platt_scale_params_file):
         val_exp_dataloader = ExperimentDataloader(exp_dataloader.exp_version, "val")
