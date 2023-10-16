@@ -123,13 +123,12 @@ def get_risks_and_confids(
 def main(exp_dataloader: ExperimentDataloader):
     aggregations = exp_dataloader.exp_version.aggregations
     unc_types = exp_dataloader.exp_version.unc_types
-    results_dict = {}
+    results_dict = {"mean": {}}
     for unc_type in unc_types:
-        results_dict[unc_type] = {}
+        results_dict["mean"][unc_type] = {}
         for aggregation in aggregations:
-            results_dict[unc_type][aggregation] = {}
-            results_dict[unc_type][aggregation]["mean"] = {}
-            results_dict[unc_type][aggregation]["mean"]["metrics"] = {}
+            results_dict["mean"][unc_type][aggregation] = {}
+            results_dict["mean"][unc_type][aggregation]["metrics"] = {}
             risks, confids, _ = get_risks_and_confids(
                 dataset_path=exp_dataloader.dataset_path,
                 image_ids=exp_dataloader.image_ids,
@@ -139,8 +138,8 @@ def main(exp_dataloader: ExperimentDataloader):
             )
             aurc_score = aurc(np.array(risks), np.array(confids))
             eaurc_score = eaurc(np.array(risks), np.array(confids))
-            results_dict[unc_type][aggregation]["mean"]["metrics"]["aurc"] = aurc_score
-            results_dict[unc_type][aggregation]["mean"]["metrics"][
+            results_dict["mean"][unc_type][aggregation]["metrics"]["aurc"] = aurc_score
+            results_dict["mean"][unc_type][aggregation]["metrics"][
                 "eaurc"
             ] = eaurc_score
     with open(exp_dataloader.dataset_path / "failure_detection.json", "w") as f:
