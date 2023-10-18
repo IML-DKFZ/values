@@ -1,0 +1,8 @@
+defaults:
+  - _self_
+  - datasets/gta
+  - tasks/table_tasks@ds_tasks
+
+base_path: "/home/kckahl/Refactoring/GTA/Experiments/FirstCycle"
+experiments:
+  - ${GTA}

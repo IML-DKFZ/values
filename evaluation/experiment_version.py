@@ -5,7 +5,6 @@ class ExperimentVersion:
     def __init__(
         self,
         base_path,
-        second_cycle_path,
         naming_scheme_version,
         pred_model,
         image_ending,
@@ -13,6 +12,7 @@ class ExperimentVersion:
         unc_types,
         aggregations,
         n_reference_segs,
+        second_cycle_path=None,
         n_classes=2,
         naming_scheme_pred_model="{pred_model}",
         datamodule_config=None,
@@ -25,6 +25,7 @@ class ExperimentVersion:
         self.version_name = self._build_version_name(
             naming_scheme_version=naming_scheme_version, **kwargs
         )
+        self.naming_scheme_version = naming_scheme_version
         self.base_path = base_path
         self.exp_path = (
             base_path
@@ -32,7 +33,9 @@ class ExperimentVersion:
             / "test_results"
             / self.version_name
         )
-        self.second_cycle_path = Path(second_cycle_path)
+        self.second_cycle_path = (
+            Path(second_cycle_path) if second_cycle_path is not None else None
+        )
         self.image_ending = image_ending
         self.unc_ending = unc_ending
         self.n_reference_segs = n_reference_segs

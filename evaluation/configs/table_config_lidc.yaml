@@ -1,0 +1,16 @@
+#@package _global_
+defaults:
+  - _self_
+  - datasets/lidc
+  - tasks/table_tasks@ds_tasks
+
+base_path: "/home/kckahl/Refactoring/LIDC-IDRI/ActiveLearning/FirstCycle"
+experiments:
+  - ${LIDC}
+
+split_param:
+  name: "shift"
+  split_values:
+    - "texture"
+    - "malignancy"
+
