@@ -1,0 +1,81 @@
+#@package _global_
+ood_detection:
+  auroc:
+    metrics_file_name: "ood_detection.json"
+    metrics_key: "auroc"
+    dataset_splits: null
+    levels: ["unc_type", "pred_model", "aggregation"]
+    higher_better: true
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+      pred_model:
+        unc_type: [ "aleatoric_uncertainty" ]
+      aggregation:
+        unc_type: [ "aleatoric_uncertainty" ]
+failure_detection:
+  aurc:
+    metrics_file_name: "failure_detection.json"
+    metrics_key: "aurc"
+    dataset_splits: ["id", "ood"]
+    levels: ["pred_model", "unc_type", "aggregation"]
+    higher_better: false
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+      pred_model:
+        unc_type: [ "aleatoric_uncertainty", "epistemic_uncertainty" ]
+      aggregation:
+        unc_type: [ "aleatoric_uncertainty", "epistemic_uncertainty" ]
+active_learning:
+  al_improvement:
+    metrics_file_name: "al_improvement.json"
+    metrics_key: "al_improvement"
+    dataset_splits: ["ood"]
+    levels: ["pred_model", "unc_type", "aggregation"]
+    higher_better: true
+    percent: true
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+calibration:
+  ace:
+    metrics_file_name: "calibration.json"
+    metrics_key: "ace"
+    dataset_splits: ["id", "ood"]
+    levels: ["pred_model", "unc_type"]
+    higher_better: false
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+      pred_model:
+        unc_type: [ "aleatoric_uncertainty", "epistemic_uncertainty" ]
+      aggregation:
+        unc_type: [ "aleatoric_uncertainty", "epistemic_uncertainty" ]
+ambiguity_modeling:
+  ncc:
+    metrics_file_name: "ambiguity_modeling.json"
+    metrics_key: "ncc"
+    dataset_splits: ["id", "ood"]
+    levels: ["pred_model", "unc_type"]
+    higher_better: true
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+      pred_model:
+        unc_type: [ "epistemic_uncertainty" ]
+      aggregation:
+        unc_type: [ "epistemic_uncertainty" ]
+  ged:
+    metrics_file_name: "metrics.json"
+    metrics_key: "ged"
+    dataset_splits: ["id", "ood"]
+    levels: ["pred_model"]
+    higher_better: false
+    filter:
+      unc_type:
+        pred_model: ["Softmax"]
+      pred_model:
+        unc_type: [ "epistemic_uncertainty" ]
+      aggregation:
+        unc_type: [ "epistemic_uncertainty" ]

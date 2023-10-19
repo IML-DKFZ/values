@@ -362,6 +362,9 @@ class DsTaskTable:
             std_df.index.names = [self.split_param.name, *std_df.index.names[1:]]
         else:
             mean_df, std_df = self.create_single_table(self.grouped_versions)
+        if "Dropout-Final" in mean_df.index.levels[0]:
+            mean_df.rename({"Dropout-Final": "Dropout"}, axis=0, level=0, inplace=True)
+            std_df.rename({"Dropout-Final": "Dropout"}, axis=0, level=0, inplace=True)
         return mean_df, std_df
 
     def format_mean_std(self, mean, std):
