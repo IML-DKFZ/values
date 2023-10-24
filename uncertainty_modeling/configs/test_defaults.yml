@@ -1,5 +1,0 @@
-checkpoint_paths: ["/media/kahl/Data2/LIDC-IDRI/ActiveLearning/FirstCycle/Softmax/malignancy_fold0_seed123/checkpoints/epoch=149-step=51750.ckpt"]
-test_split: "ood"
-# data_input_dir: "/media/kahl/Data2/LIDC-IDRI/CroppedData"
-# save_dir: "/media/kahl/Data2/LIDC-IDRI/ActiveLearning/FirstCycle"
-# n_pred: 10

@@ -30,7 +30,7 @@ def set_seed(seed):
     os.environ["PYTHONHASHSEED"] = str(seed)
 
 
-@hydra.main(config_path="configs", config_name="default_config")
+@hydra.main(config_path="configs", config_name="softmax_config")
 def main(cfg_hydra: DictConfig):
     """Uses the pl.Trainer to fit & test the model
 

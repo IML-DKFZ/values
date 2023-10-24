@@ -25,11 +25,11 @@ from main import set_seed
 from tqdm import tqdm
 
 
-def test_cli(config_file: str = "configs/test_defaults.yml") -> Namespace:
+def test_cli(config_file: str = None) -> Namespace:
     """
     Set the arguments for testing
     Args:
-        config_file: path to default arguments for testing. Defaults to './test_unet_defaults.yml'
+        config_file: optional, path to default arguments for testing.
 
     Returns:
         args [Namespace]: all arguments needed for testing
@@ -110,12 +110,12 @@ def test_cli(config_file: str = "configs/test_defaults.yml") -> Namespace:
     parser.add_argument(
         "--test_time_augmentations", "-tta", dest="tta", action="store_true"
     )
-    # parser.add_argument("--id", dest="id", action="store_true")
-    # parser.add_argument("--ood", dest="id", action="store_false")
-    with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
 
-    parser.set_defaults(**config)
+    if config_file is not None:
+        with open(os.path.join(os.path.dirname(__file__), config_file), "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        parser.set_defaults(**config)
+
     args = parser.parse_args()
     return args
 
