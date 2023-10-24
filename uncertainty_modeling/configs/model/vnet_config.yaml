@@ -1,2 +1,0 @@
-_target_: uncertainty_modeling.models.vnet_module.VNet
-num_classes: 2
