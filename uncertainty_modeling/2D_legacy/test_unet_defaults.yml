@@ -1,3 +1,0 @@
-checkpoint_path: "/media/kahl/Data/Uncertainty/ToyExperiment/Toy-Data-Test/version_0/checkpoints/epoch=0-step=10240.ckpt"
-data_input_dir: "/media/kahl/Data/Uncertainty/ToyData"
-save_dir: "/media/kahl/Data/Uncertainty/ToyExperiment"
