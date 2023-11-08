@@ -25,10 +25,7 @@ setup(
     name="uncertainty_modeling",
     version="0.1",
     packages=find_packages(),
-    python_requires=">=3.6",
+    python_requires="==3.10",
     install_requires=requirements,
-    description="Basic segmentation example implemented in Pytorch Lightning.",
-    author="Gregor Koehler, Carsten Lueth, Finja Ottink, Michael Baumgartner,"
-    "Balint Kovacs, Maximilian Zenk, Kim-Celine Kahl "
-    "(Medical Image Computing Group and Interactive Machine Learning Group, DKFZ)",
+    description="Uncertainty Modeling for Semantic Segmentation",
 )
