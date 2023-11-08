@@ -1,6 +1,9 @@
 """
 ------------------------------------------------------------------------------
 Code slightly adapted and mainly from:
+https://github.com/MIC-DKFZ/semantic_segmentation/blob/public/models/hrnet.py
+
+There, the code was slightly adapted from:
 https://github.com/HRNet/HRNet-Semantic-Segmentation/blob/HRNet-OCR/lib/models/seg_hrnet.py
         ------------------------------------------------------------------------------
         Copyright (c) Microsoft

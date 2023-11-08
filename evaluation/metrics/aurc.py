@@ -1,3 +1,10 @@
+"""
+------------------------------------------------------------------------------
+Code adapted for segmentation and mainly from:
+https://github.com/IML-DKFZ/fd-shifts/blob/main/fd_shifts/analysis/metrics.py
+------------------------------------------------------------------------------
+"""
+
 import json
 import numpy as np
 

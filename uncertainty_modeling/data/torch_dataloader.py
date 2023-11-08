@@ -1,3 +1,10 @@
+"""
+------------------------------------------------------------------------------
+Code slightly adapted and mainly from:
+https://github.com/MIC-DKFZ/semantic_segmentation/blob/public/datasets/DataModules.py
+------------------------------------------------------------------------------
+"""
+
 import hydra
 from omegaconf import DictConfig
 import numpy as np
