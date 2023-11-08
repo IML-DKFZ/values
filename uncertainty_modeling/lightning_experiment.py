@@ -196,9 +196,6 @@ class LightningExperiment(pl.LightningModule):
             # one sample batch for visualization
             sample_idx = randrange(self.n_aleatoric_samples)
             output = samples[sample_idx]
-        # if self.current_epoch < self.pretrain_epochs:
-        #     loss = F.cross_entropy(samples[0], target, ignore_index=self.ignore_index)
-        # else:
         target = target.unsqueeze(1)
         target = target.expand((self.n_aleatoric_samples,) + target.shape)
         flat_size = self.n_aleatoric_samples * batch["data"].size()[0]

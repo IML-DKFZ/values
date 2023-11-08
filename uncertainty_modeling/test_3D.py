@@ -279,14 +279,6 @@ def calculate_test_metrics(
         "dice": np.mean(np.array(all_test_dice)),
     }
     return metrics_dict
-    # dice_loss = SoftDiceLoss()
-    # nll_loss = torch.nn.NLLLoss()
-    # test_loss = dice_loss(output_softmax, ground_truth) + nll_loss(
-    #     torch.log(output_softmax), ground_truth
-    # )
-    # test_dice = dice(output_softmax, ground_truth, ignore_index=0)
-    # metrics_dict = {"loss": test_loss.item(), "dice": test_dice.item()}
-    # return metrics_dict
 
 
 def calculate_ged(

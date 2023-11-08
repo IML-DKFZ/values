@@ -72,10 +72,6 @@ class Cityscapes_dataset(torch.utils.data.Dataset):
         img = np.load(self.imgs[idx])
 
         mask = np.load(self.masks[idx])
-        # img = cv2.imread(self.imgs[idx])
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        #
-        # mask = cv2.imread(self.masks[idx], -1)
 
         if self.tta:
             images = [img]
@@ -152,7 +148,7 @@ def get_data_samples(
 
     (image_dir, _, image_filenames) = next(os.walk(os.path.join(base_dir, "images")))
     (label_dir, _, label_filenames) = next(os.walk(os.path.join(base_dir, "labels")))
-    # subject_ids = [subject.replace(".npy", ".png") for subject in subject_ids]
+
     for image_filename in sorted(fnmatch.filter(image_filenames, pattern)):
         if subject_ids is not None and image_filename in subject_ids:
             image_path = os.path.join(image_dir, image_filename)

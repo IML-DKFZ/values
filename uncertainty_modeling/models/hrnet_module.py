@@ -23,11 +23,6 @@ import torch._utils
 import torch.nn.functional as F
 import torch.distributions as td
 
-# import logging
-# log=logging.getLogger(__name__)
-# from src.utils import get_logger
-#
-# log = get_logger(__name__)
 
 BatchNorm2d = BatchNorm2d_class = nn.BatchNorm2d
 

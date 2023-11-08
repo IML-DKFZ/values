@@ -16,8 +16,6 @@ import uncertainty_modeling.augmentations as custom_augmentations
 
 # set number of Threads to 0 for opencv and albumentations
 cv2.setNumThreads(0)
-# import logger
-# log = get_logger(__name__)
 
 
 def seed_worker(worker_id):
@@ -223,11 +221,6 @@ class BaseDataModule(LightningDataModule):
             num_epochs=self.trainer.max_epochs,
             drop_last=True,
         )
-        # base_size = len(self.DS_train)
-        # steps_per_epoch = base_size // self.batch_size
-        # steps_per_gpu = int(np.ceil(steps_per_epoch / self.trainers.num_devices))
-        # acc_steps_per_gpu = int(np.ceil(steps_per_gpu / self.trainers.accumulate_grad_batches))
-        # max_steps = self.trainers.max_epochs * acc_steps_per_gpu
 
         print(
             "Number of Training steps: {}  ({} steps per epoch)".format(
