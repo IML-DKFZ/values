@@ -5,7 +5,7 @@ defaults:
   - tasks/threshold
   - tasks/aggregation_patch_thresh
 
-base_path: "/home/kckahl/Uncertainty/ToyExperimentOOD/AleatoricTrain"
+base_path: "/home/${oc.env:USER}/Uncertainty/ToyExperimentOOD/AleatoricTrain"
 experiments:
   - ${TOY}
   - ${TOY_SEED123}

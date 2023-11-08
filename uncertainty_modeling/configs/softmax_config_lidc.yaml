@@ -3,8 +3,8 @@ defaults:
   - model: unet3D_config
 exp_name: "Softmax"
 version: "test"
-data_input_dir: "/media/kahl/Data2/LIDC-IDRI/CroppedData"
-save_dir: "/media/kahl/Data2/LIDC-IDRI/ShiftAnalysis"
+data_input_dir: "/home/${oc.env:USER}/LIDC-IDRI/CroppedData"
+save_dir: "/home/${oc.env:USER}/LIDC-IDRI/ShiftAnalysis"
 seed: 123
 max_epochs: 150
 batch_size: 8

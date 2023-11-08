@@ -3,6 +3,6 @@ defaults:
   - datasets/gta
   - tasks/table_tasks@ds_tasks
 
-base_path: "/home/kckahl/Refactoring/GTA/Experiments/FirstCycle"
+base_path: "/home/${oc.env:USER}/Refactoring/GTA/Experiments/FirstCycle"
 experiments:
   - ${GTA}

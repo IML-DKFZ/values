@@ -4,7 +4,7 @@ defaults:
   - datasets/lidc
   - tasks/table_tasks@ds_tasks
 
-base_path: "/home/kckahl/Refactoring/LIDC-IDRI/ActiveLearning/FirstCycle"
+base_path: "/home/${oc.env:USER}/Refactoring/LIDC-IDRI/ActiveLearning/FirstCycle"
 experiments:
   - ${LIDC}
 

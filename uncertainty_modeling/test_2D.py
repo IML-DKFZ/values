@@ -52,9 +52,6 @@ class Tester:
         for checkpoint_path in checkpoint_paths:
             checkpoint = torch.load(checkpoint_path)
             checkpoint["hyper_parameters"]["MODEL"]["PRETRAINED"] = False
-            # checkpoint["hyper_parameters"]["MODEL"][
-            #     "pretrained_path"
-            # ] = "/home/kckahl/Code/uncertainty-modeling/uncertainty_modeling/pretrained"
             conf = OmegaConf.create(checkpoint["hyper_parameters"])
             resolved = OmegaConf.to_container(conf, resolve=True)
             checkpoint["hyper_parameters"] = resolved

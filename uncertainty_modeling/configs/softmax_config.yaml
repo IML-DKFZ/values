@@ -3,8 +3,8 @@ defaults:
   - model: unet3D_config
 exp_name: "Softmax-Case-1"
 version: null
-data_input_dir: "/dkfz/cluster/gpu/data/OE0612/kahl/toy-data"
-save_dir: "/dkfz/cluster/gpu/checkpoints/OE0612/kahl/toy-experiments"
+data_input_dir: "/home/${oc.env:USER}/Uncertainty/ToyData"
+save_dir: "/home/${oc.env:USER}/Uncertainty/ToyExperiments"
 seed: 123
 max_epochs: 50
 batch_size: 8

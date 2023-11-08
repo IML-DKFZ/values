@@ -11,7 +11,7 @@ MODEL:
   # Set to false, was initially true
   PRETRAINED: true
   pretrained_on: ImageNet
-  pretrained_path: /home/kckahl/Code/uncertainty-modeling/uncertainty_modeling/pretrained
+  pretrained_path: /home/${oc.env:USER}/Code/uncertainty-modeling/uncertainty_modeling/pretrained
   PRETRAINED_WEIGHTS: ${MODEL.pretrained_path}/${MODEL.available_weights.${MODEL.pretrained_on}}
   # PRETRAINED_WEIGHTS: /nvme/GTA/Softmax-Debug/test-more-data/checkpoints/epoch=3-step=2000.ckpt
   available_weights:

@@ -3,8 +3,8 @@ defaults:
   - model: ssn_unet3D_config
 exp_name: "SSN-Case-1"
 version: "pretrain_mean_debug"
-data_input_dir: "/dkfz/cluster/gpu/data/OE0612/kahl/toy-data"
-save_dir: "/dkfz/cluster/gpu/checkpoints/OE0612/kahl/toy-experiments"
+data_input_dir: "/home/${oc.env:USER}/Uncertainty/ToyData"
+save_dir: "/home/${oc.env:USER}/Uncertainty/ToyExperiments"
 seed: 123
 max_epochs: 10
 pretrain_epochs: 5
