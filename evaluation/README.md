@@ -25,7 +25,7 @@ usable for the downstream tasks. This includes:
 Afterwards, the metrics for the different downstream tasks can be calculated. 
 Note that for most of the metrics, the aggregation step in the preprocessing is necessary
 and also for the AL improvement, a second cycle of training has to be performed using the generated split files from above.
-This includes the following downstream tasks with their respective metrics:
+The following downstream tasks with their respective metrics can be evaluated:
 - OoD-Detection: AUROC
 - Failure Detection: AURC and E-AURC
 - AL Improvement: Relative AL Improvement in terms of Dice score compared to first cycle training
@@ -143,13 +143,13 @@ There are currently two ways to display the results of the different downstream 
 The table is thereby printed as latex code. Compiled in latex, it looks like this (for the GTA dataset, columns slightly manually renamed):
 
 
-<img src="../main_results_table.png" alt="Main Results Barplots" width="100%">
+<img src="../figures/main_results_table.png" alt="Main Results Table" width="100%">
 
 
 The aggregated barplots look like this:  
 
 
-<img src="../main_results_barplots.png" alt="Main Results Barplots" width="70%">  
+<img src="../figures/main_results_barplots.png" alt="Main Results Barplots" width="70%">  
 
 
 These visualizations can be created with the ```ds_task_table.py``` and ```ds_task_barplots.py``` scripts in the visualizations subfolder. These files again take some yaml configuration, of which the structure is explained in the following section.

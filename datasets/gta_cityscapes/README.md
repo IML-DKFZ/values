@@ -1,6 +1,6 @@
 # Processing the GTA 5 and Cityscapes datasets
 
-This folder contains the necessary code to process the GTA 5 and the cityscapes dataset. The main behind the combination
+This folder contains the necessary code to process the GTA 5 and the cityscapes dataset. The main idea behind the combination
 of those two dataset is to train only on the GTA 5 dataset first and then analyse the uncertainty outputs on both 
 datasets and train another cycle including the most uncertain cases, including those from the cityscapes dataset.
 

@@ -7,7 +7,7 @@ The following sections will explain the configs for how to start a training and 
 
 ## Running a training
 
-For running a training, execute ```main.py``` with the appropriate configuration for the setup you want to train. For example on how to configure a training, see the config files in the ```configs``` subfolder. Generally, there are entry files on the top level of this folder, e.g. ```softmax_config.yaml``` which themselves include different datamodules, models, etc., specified in the corresponding subfolders.  
+For running a training, execute ```main.py``` with the appropriate configuration for the setup you want to train. For examples on how to configure a training, see the config files in the ```configs``` subfolder. Generally, there are entry files on the top level of this folder, e.g. ```softmax_config.yaml``` which themselves include different datamodules, models, etc., specified in the corresponding subfolders.  
 The structure for the entry configuration is like this:
 
 ```yaml
@@ -19,7 +19,7 @@ defaults:
 
 # Save directory for a specific experiment version is made up of save_dir/exp_name/version
 exp_name: <name of experiment, mostly prediction model, e.g. "Softmax">
-version: <name of the version, usually made up of seed and fold, e.g. fold0_seed123 or additional properties like pretrain epocs (for SSNs) etc. Basically everything that is unique about the experiment version>
+version: <name of the version, usually made up of seed and fold, e.g. fold0_seed123 or additional properties like pretrain epochs (for SSNs) etc. Basically everything that is unique about the experiment version>
 save_dir: <base_path/to/save/experiments>
 # datasets should be preprocessed as described in datasets subfolder
 data_input_dir: <base_path/to/data>

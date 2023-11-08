@@ -61,7 +61,7 @@ python splits_first_cycle.py -s <path to store splits> --id_ood_csv <path to csv
 
 As features for splitting, we used texture and malignancy. Here you can see a diagram how the splits are created:
 
-<img src="./Splits_AL.png" alt="Splits for the initial training" width="50%">
+<img src="../../figures/Splits_AL_LIDC.png" alt="Splits for the initial training" width="50%">
 
 ## Preprocess the data
 
