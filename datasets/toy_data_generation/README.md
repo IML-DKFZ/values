@@ -7,13 +7,8 @@ your own datasets using custom stl files and blender.
 
 ## Setup
 
-To generate the toy datasets based on stl files, you need to clone the forked stl-to-voxel repo:
-
-```
-git clone https://github.com/kck278/stl-to-voxel.git
-cd stl-to-voxel
-pip install .
-```
+To generate the toy datasets based on stl files, you need to clone the forked stl-to-voxel repo.
+Note, that the link for this is currently excluded for reasons of anonymity.
 
 ## Create the toy datasets used in our experiments
 
