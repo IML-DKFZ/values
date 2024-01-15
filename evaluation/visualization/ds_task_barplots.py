@@ -21,6 +21,7 @@ def generate_barplot(
     percent: bool = False,
     df_naming=None,
     coloring=None,
+    hatches=None,
     ordering=None,
     filter_index=None,
 ):
@@ -69,9 +70,29 @@ def generate_barplot(
         colors = dict(coloring[dimension])
     else:
         colors = None
+
+    if hatches and dimension in hatches:
+        hatch = dict(hatches[dimension])
+    else:
+        hatch = None
+
     ax = dfs_mean_concat.T.plot.bar(
         yerr=dfs_std_concat.T, capsize=4, figsize=(5, 6), color=colors, fontsize=19
     )
+
+    if hatch:
+        bars = ax.patches
+        hatch_df = dfs_mean_concat.copy()
+        for key in hatch_df.index:
+            hatch_df.loc[key] = hatch[key]
+        hatch_list = hatch_df.to_numpy().flatten()
+        for bar, h in zip(bars, hatch_list):
+            bar_color = bar.get_fc()
+            color_opaque = (bar_color[0], bar_color[1], bar_color[2], 0.6)
+            bar.set_facecolor(color_opaque)
+            bar.set_hatch(h)
+            bar._hatch_color = bar_color
+
     plt.ylabel(" ".join(metric.split(" ")[0].split("_")), fontsize=19)
     plt.xticks(rotation=0)
     ax.set_yticks(ax.get_yticks().tolist())
@@ -127,6 +148,7 @@ def main(plot_config):
                 df_copy = copy.deepcopy(dataset_dfs)
                 lower_better = not metric_config.higher_better
                 coloring = plot_config.coloring if "coloring" in plot_config else None
+                hatches = plot_config.hatches if "hatches" in plot_config else None
                 ordering = plot_config.ordering if "ordering" in plot_config else None
                 percent = metric_config.percent if "percent" in metric_config else False
                 df_naming = (
@@ -143,6 +165,7 @@ def main(plot_config):
                         filter_index=filter_ds,
                         df_naming=df_naming,
                         coloring=coloring,
+                        hatches=hatches,
                         ordering=ordering,
                         results_plot_dir=Path(plot_config.save_path),
                     )
@@ -158,6 +181,7 @@ def main(plot_config):
                             filter_index=filter_ds,
                             df_naming=df_naming,
                             coloring=coloring,
+                            hatches=hatches,
                             ordering=ordering,
                             results_plot_dir=Path(plot_config.save_path),
                         )

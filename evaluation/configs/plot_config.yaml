@@ -17,5 +17,21 @@ coloring:
     epistemic_uncertainty: "tab:pink"
     predictive_uncertainty: "tab:olive"
 
+hatches:
+  unc_type:
+    aleatoric_uncertainty: "//"
+    epistemic_uncertainty: "xx"
+    predictive_uncertainty: "--"
+  pred_model:
+    Softmax: "//"
+    Dropout: "xx"
+    Ensemble: "--"
+    TTA: "\\\\"
+    SSN: "oo"
+  aggregation:
+    patch_level: "//"
+    threshold: "xx"
+    image_level: "--"
+
 ordering:
   pred_model: ["Softmax", "Dropout", "Ensemble", "TTA", "SSN"]
