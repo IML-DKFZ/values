@@ -59,7 +59,7 @@ The code is tested with python version 3.10.
 
 ### Running instructions
 
-Each of the following three folders contain separate README files with instructions how to reproduce the datasets, network training and inference, as well as experiment analysis, respectively:
+Each of the following three folders contains separate README files with instructions how to reproduce the datasets, network training and inference, as well as experiment analysis, respectively:
 
 - datasets: This folder contains all the code to set up the datasets. This includes the used toy dataset    (toy_data_generation), the lung nodule dataset (lidc-idri) and the GTA5 / Cityscapes dataset (gta_cityscapes).
 - uncertainty_modeling: This folder contains the main part for training and inference of the various 
