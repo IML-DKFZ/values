@@ -57,9 +57,9 @@ The code is tested with python version 3.10.
    pip install -r requirements.txt
    ```
 
-### Structure of this repository
+### Running instructions
 
-This repository consists of three main parts which are in separate folders:
+Each of the following three folders contain separate README files with instructions how to reproduce the datasets, network training and inference, as well as experiment analysis, respectively:
 
 - datasets: This folder contains all the code to set up the datasets. This includes the used toy dataset    (toy_data_generation), the lung nodule dataset (lidc-idri) and the GTA5 / Cityscapes dataset (gta_cityscapes).
 - uncertainty_modeling: This folder contains the main part for training and inference of the various 
@@ -67,9 +67,6 @@ This repository consists of three main parts which are in separate folders:
 - evaluation: This folder contains the code for analysis of the experiments that is done after the inference, 
   e.g. aggregation of uncertaintiy maps, OoD detection performance, AURC etc.
 
-### Running instructions
-
-Each subfolder contains separate README files with instructions how to reproduce the datasets, network training and inference, as well as experiment analysis, respectively.
 
 ## Acknowledgements
 
