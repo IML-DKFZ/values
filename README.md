@@ -75,6 +75,8 @@ Parts of this repository, esp. concerning the U-Net model training in uncertaint
 
 The code for the HRNet training is based on the [Semantic Segmentation Repository](https://github.com/MIC-DKFZ/semantic_segmentation).
 
+This work was funded by Helmholtz Imaging (HI), a platform of the Helmholtz Incubator on Information and Data Science. This work is supported by the Helmholtz Association Initiative and Networking Fund under the Helmholtz AI platform grant (ALEGRA (ZT-I-PF-5-121))
+
 ---
 
 <br>
